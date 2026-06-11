@@ -351,7 +351,7 @@ img {
 
 .hero {
   position: relative;
-  height: 100dvh;
+  height: 100svh;
   min-height: 600px;
   display: flex;
   align-items: center;
@@ -473,7 +473,7 @@ img {
 /* ===== HERO CATEGORIA ===== */
 
 .hero-categoria {
-  height: 70dvh;
+  height: 70svh;
   min-height: 500px;
 }
 
@@ -517,7 +517,7 @@ img {
 }
 
 .hero-producto {
-  height: 60dvh;
+  height: 60svh;
   min-height: 400px;
 }
 
@@ -1044,7 +1044,7 @@ img {
     top: 0;
     right: -100%;
     width: 280px;
-    height: 100dvh;
+    height: 100svh;
     background: var(--black);
     flex-direction: column;
     align-items: flex-start;
