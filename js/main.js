@@ -191,6 +191,7 @@
         var currentSlide = 0; // 0 = producto, 1 = tabla
         var track = document.getElementById('sliderTrack');
         var slideTimer;
+        slideTo(0, true);
         function slideTo(idx, instant) {
           track.style.transition = instant ? 'none' : '';
           var pos = -(idx + 1) * 100; // producto= -100%, tabla = -200%
@@ -209,11 +210,11 @@
             currentSlide = 1;
             updateDots(1);
           } else {
-            slideTo(2); // producto clone (index 3, pos -300%)
+            updateDots(0);
+            slideTo(2);
             slideTimer = setTimeout(function () {
-              slideTo(0, true); // jump to real producto (index 1, pos -100%)
+              slideTo(0, true);
               currentSlide = 0;
-              updateDots(0);
             }, 400);
           }
         }
@@ -224,11 +225,11 @@
             currentSlide = 0;
             updateDots(0);
           } else {
-            slideTo(-1); // tabla clone (index 0, pos 0%)
+            updateDots(1);
+            slideTo(-1);
             slideTimer = setTimeout(function () {
-              slideTo(1, true); // jump to real tabla (index 2, pos -200%)
+              slideTo(1, true);
               currentSlide = 1;
-              updateDots(1);
             }, 400);
           }
         }
