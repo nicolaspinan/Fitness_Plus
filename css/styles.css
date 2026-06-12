@@ -1311,7 +1311,7 @@ img {
 
 @media (min-width: 768px) {
   .detalle-arrow {
-    display: none;
+    display: flex;
   }
 }
 
