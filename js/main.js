@@ -175,6 +175,9 @@
               '<div class="detalle-slide" id="slide-tabla">' +
                 '<img src="' + prod.tabla + '" alt="Tabla nutricional de ' + prod.nombre + '" loading="lazy">' +
               '</div>' +
+              '<div class="detalle-slide" id="slide-clone">' +
+                '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">' +
+              '</div>' +
             '</div>' +
             '<button class="detalle-arrow prev" id="slidePrev" aria-label="Anterior">&#10094;</button>' +
             '<button class="detalle-arrow next" id="slideNext" aria-label="Siguiente">&#10095;</button>' +
@@ -183,17 +186,41 @@
             '</div>' +
           '</div>';
         var currentSlide = 0;
-        var totalSlides = 2;
-        function goToSlide(idx) {
-          if (idx < 0 || idx >= totalSlides) return;
-          currentSlide = idx;
-          document.getElementById('sliderTrack').style.transform = 'translateX(-' + (idx * 100) + '%)';
+        var realSlides = 2;
+        var track = document.getElementById('sliderTrack');
+        var slideTimer;
+        function updateDots(idx) {
           document.querySelectorAll('#slideDots .dot').forEach(function (d, i) {
             d.classList.toggle('active', i === idx);
           });
         }
-        document.getElementById('slidePrev').addEventListener('click', function () { goToSlide(currentSlide - 1); });
-        document.getElementById('slideNext').addEventListener('click', function () { goToSlide(currentSlide + 1); });
+        function goToSlide(idx) {
+          if (idx < 0) idx = realSlides - 1;
+          if (idx >= realSlides) idx = 0;
+          currentSlide = idx;
+          track.style.transform = 'translateX(-' + (idx * 100) + '%)';
+          updateDots(idx);
+        }
+        document.getElementById('slideNext').addEventListener('click', function () {
+          clearTimeout(slideTimer);
+          if (currentSlide === realSlides - 1) {
+            track.style.transform = 'translateX(-' + (realSlides * 100) + '%)';
+            slideTimer = setTimeout(function () {
+              track.style.transition = 'none';
+              track.style.transform = 'translateX(0%)';
+              track.offsetHeight;
+              track.style.transition = '';
+              currentSlide = 0;
+              updateDots(0);
+            }, 400);
+          } else {
+            goToSlide(currentSlide + 1);
+          }
+        });
+        document.getElementById('slidePrev').addEventListener('click', function () {
+          clearTimeout(slideTimer);
+          goToSlide(currentSlide - 1);
+        });
       } else {
         detalleImg.innerHTML = '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">';
       }
