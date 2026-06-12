@@ -1309,6 +1309,12 @@ img {
   }
 }
 
+@media (min-width: 768px) {
+  .detalle-arrow {
+    display: none;
+  }
+}
+
 @media (max-width: 480px) {
   .hero-content h1 {
     font-size: 2.2rem;
