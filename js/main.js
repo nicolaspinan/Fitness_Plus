@@ -1,11 +1,12 @@
 (function () {
 
   const fullProductos = [
-{
+    {
       nombre: 'CREATINA MYPROTEIN',
       descripcion: 'Creatina pura en polvo sin aditivos. Ideal para aumentar masa muscular y recuperación.',
       precio: 29900,
       img: 'img/Creatinas/creatina_myprotein.png',
+      tabla: 'img/tablas_nutricionales/myprotein_tabla.jpeg',
       categoria: 'creatina',
       marca: 'MyProtein'
     },
@@ -14,6 +15,7 @@
       descripcion: 'Fórmula premium de creatina micronizada. Maximizá tu explosividad en cada serie.',
       precio: 28800,
       img: 'img/Creatinas/creatina_starnutrition.png',
+      tabla: 'img/tablas_nutricionales/starnutriton_tabla.jpeg',
       categoria: 'creatina',
       marca: 'Star Nutrition'
     },
@@ -22,14 +24,25 @@
       descripcion: 'Creatina de alta pureza con rápida absorción. Resultados visibles en semanas.',
       precio: 29600,
       img: 'img/Creatinas/creatina_ena.png',
+      tabla: 'img/tablas_nutricionales/ena_tabla.jpeg',
       categoria: 'creatina',
       marca: 'ENA'
+    },
+    {
+      nombre: 'CREATINA GOOM',
+      descripcion: 'Creatina micronizada de alta pureza con rápida absorción. Potenciá tu fuerza y rendimiento al máximo.',
+      precio: 39900,
+      img: 'img/Creatinas/goom_creatina3.png',
+      tabla: 'img/tablas_nutricionales/goom_tabla.png',
+      categoria: 'creatina',
+      marca: 'Goom'
     },
     {
       nombre: 'PRE-WORKOUT PREWAR',
       descripcion: 'Explosión de energía extrema con beta-alanina y cafeína. Llevá tu entreno al límite.',
       precio: 34400,
       img: 'img/Preentrenos/preentrenos_prewar.png',
+      tabla: 'img/tablas_nutricionales/prewar_tabla.jpeg',
       categoria: 'preentreno',
       marca: 'PreWar'
     },
@@ -38,6 +51,7 @@
       descripcion: 'Pre-entreno avanzado con óxido nítrico para vascularización y pumps increíbles.',
       precio: 35500,
       img: 'img/Preentrenos/preentrenos_pumpv8_sandia.png',
+      tabla: 'img/tablas_nutricionales/pump-v8_sandia_tabla.jpg',
       categoria: 'preentreno',
       marca: 'Pump V8'
     }
@@ -150,8 +164,39 @@
       document.getElementById('detalleNombre').textContent = prod.nombre;
       document.getElementById('detalleDescripcion').textContent = prod.descripcion;
       document.getElementById('detallePrecio').textContent = '$' + prod.precio.toLocaleString('es-AR');
-      document.getElementById('detalleImagen').innerHTML =
-        '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">';
+      const detalleImg = document.getElementById('detalleImagen');
+      if (prod.tabla) {
+        detalleImg.innerHTML =
+          '<div class="detalle-slider">' +
+            '<div class="detalle-slider-track" id="sliderTrack">' +
+              '<div class="detalle-slide" id="slide-producto">' +
+                '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">' +
+              '</div>' +
+              '<div class="detalle-slide" id="slide-tabla">' +
+                '<img src="' + prod.tabla + '" alt="Tabla nutricional de ' + prod.nombre + '" loading="lazy">' +
+              '</div>' +
+            '</div>' +
+            '<button class="detalle-arrow prev" id="slidePrev" aria-label="Anterior">&#10094;</button>' +
+            '<button class="detalle-arrow next" id="slideNext" aria-label="Siguiente">&#10095;</button>' +
+            '<div class="detalle-dots" id="slideDots">' +
+              '<span class="dot active"></span><span class="dot"></span>' +
+            '</div>' +
+          '</div>';
+        var currentSlide = 0;
+        var totalSlides = 2;
+        function goToSlide(idx) {
+          if (idx < 0 || idx >= totalSlides) return;
+          currentSlide = idx;
+          document.getElementById('sliderTrack').style.transform = 'translateX(-' + (idx * 100) + '%)';
+          document.querySelectorAll('#slideDots .dot').forEach(function (d, i) {
+            d.classList.toggle('active', i === idx);
+          });
+        }
+        document.getElementById('slidePrev').addEventListener('click', function () { goToSlide(currentSlide - 1); });
+        document.getElementById('slideNext').addEventListener('click', function () { goToSlide(currentSlide + 1); });
+      } else {
+        detalleImg.innerHTML = '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">';
+      }
       document.title = prod.nombre + ' | Comprar — Fitness Plus';
 
       const descMeta = document.querySelector('meta[name="description"]');
