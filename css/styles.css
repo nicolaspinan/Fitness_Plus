@@ -545,6 +545,7 @@ img {
 .detalle-slider {
   position: relative;
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .detalle-slider-track {
@@ -1303,11 +1304,8 @@ img {
 }
 
 @media (max-width: 768px) {
-  .detalle-arrow.prev {
-    left: -11px;
-  }
-  .detalle-arrow.next {
-    right: -11px;
+  .detalle-arrow {
+    display: none;
   }
 }
 

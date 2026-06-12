@@ -169,13 +169,16 @@
         detalleImg.innerHTML =
           '<div class="detalle-slider">' +
             '<div class="detalle-slider-track" id="sliderTrack">' +
+              '<div class="detalle-slide" id="slide-clone-tabla">' +
+                '<img src="' + prod.tabla + '" alt="Tabla nutricional de ' + prod.nombre + '" loading="lazy">' +
+              '</div>' +
               '<div class="detalle-slide" id="slide-producto">' +
                 '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">' +
               '</div>' +
               '<div class="detalle-slide" id="slide-tabla">' +
                 '<img src="' + prod.tabla + '" alt="Tabla nutricional de ' + prod.nombre + '" loading="lazy">' +
               '</div>' +
-              '<div class="detalle-slide" id="slide-clone">' +
+              '<div class="detalle-slide" id="slide-clone-producto">' +
                 '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">' +
               '</div>' +
             '</div>' +
@@ -185,42 +188,63 @@
               '<span class="dot active"></span><span class="dot"></span>' +
             '</div>' +
           '</div>';
-        var currentSlide = 0;
-        var realSlides = 2;
+        var currentSlide = 0; // 0 = producto, 1 = tabla
         var track = document.getElementById('sliderTrack');
         var slideTimer;
+        function slideTo(idx, instant) {
+          track.style.transition = instant ? 'none' : '';
+          var pos = -(idx + 1) * 100; // producto= -100%, tabla = -200%
+          track.style.transform = 'translateX(' + pos + '%)';
+          if (instant) { track.offsetHeight; track.style.transition = ''; }
+        }
         function updateDots(idx) {
           document.querySelectorAll('#slideDots .dot').forEach(function (d, i) {
-            d.classList.toggle('active', i === idx);
+            d.classList.toggle('active', (idx === 0 && i === 0) || (idx === 1 && i === 1));
           });
         }
-        function goToSlide(idx) {
-          if (idx < 0) idx = realSlides - 1;
-          if (idx >= realSlides) idx = 0;
-          currentSlide = idx;
-          track.style.transform = 'translateX(-' + (idx * 100) + '%)';
-          updateDots(idx);
-        }
-        document.getElementById('slideNext').addEventListener('click', function () {
+        function nextSlide() {
           clearTimeout(slideTimer);
-          if (currentSlide === realSlides - 1) {
-            track.style.transform = 'translateX(-' + (realSlides * 100) + '%)';
+          if (currentSlide === 0) {
+            slideTo(1);
+            currentSlide = 1;
+            updateDots(1);
+          } else {
+            slideTo(2); // producto clone (index 3, pos -300%)
             slideTimer = setTimeout(function () {
-              track.style.transition = 'none';
-              track.style.transform = 'translateX(0%)';
-              track.offsetHeight;
-              track.style.transition = '';
+              slideTo(0, true); // jump to real producto (index 1, pos -100%)
               currentSlide = 0;
               updateDots(0);
             }, 400);
-          } else {
-            goToSlide(currentSlide + 1);
           }
-        });
-        document.getElementById('slidePrev').addEventListener('click', function () {
+        }
+        function prevSlide() {
           clearTimeout(slideTimer);
-          goToSlide(currentSlide - 1);
-        });
+          if (currentSlide === 1) {
+            slideTo(0);
+            currentSlide = 0;
+            updateDots(0);
+          } else {
+            slideTo(-1); // tabla clone (index 0, pos 0%)
+            slideTimer = setTimeout(function () {
+              slideTo(1, true); // jump to real tabla (index 2, pos -200%)
+              currentSlide = 1;
+              updateDots(1);
+            }, 400);
+          }
+        }
+        document.getElementById('slideNext').addEventListener('click', nextSlide);
+        document.getElementById('slidePrev').addEventListener('click', prevSlide);
+        var touchX = 0;
+        detalleImg.addEventListener('touchstart', function (e) {
+          touchX = e.changedTouches[0].screenX;
+        }, { passive: true });
+        detalleImg.addEventListener('touchend', function (e) {
+          var diff = touchX - e.changedTouches[0].screenX;
+          if (Math.abs(diff) > 50) {
+            clearTimeout(slideTimer);
+            if (diff > 0) { nextSlide(); } else { prevSlide(); }
+          }
+        }, { passive: true });
       } else {
         detalleImg.innerHTML = '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">';
       }
