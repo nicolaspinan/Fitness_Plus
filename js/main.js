@@ -246,8 +246,8 @@
             if (diff > 0) { nextSlide(); } else { prevSlide(); }
           }
         }, { passive: true });
-        if ('ontouchstart' in window && typeof PinchZoom !== 'undefined') {
-          try { new PinchZoom('#slide-tabla img, #slide-clone-tabla img', {}); } catch (e) {}
+        if ('ontouchstart' in window) {
+          try { mediumZoom('#slide-tabla img, #slide-clone-tabla img'); } catch (e) {}
         }
       } else {
         detalleImg.innerHTML = '<img src="' + prod.img + '" alt="' + prod.nombre + '" loading="lazy" width="600" height="600">';

@@ -545,6 +545,7 @@ img {
 .detalle-slider {
   position: relative;
   overflow: hidden;
+  touch-action: pan-y;
 }
 
 .detalle-slider-track {
