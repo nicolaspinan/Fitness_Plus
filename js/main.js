@@ -504,7 +504,7 @@
   }
 
   var overlay = document.querySelector('.page-overlay');
-  var TRANSITION_DURATION = 220;
+  var TRANSITION_DURATION = 120;
 
   window.pageTransition = function (url) {
     if (overlay) { overlay.classList.add('active'); }
