@@ -1002,23 +1002,6 @@ img {
   transform: translateY(0);
 }
 
-/* ===== PAGE TRANSITION OVERLAY ===== */
-
-.page-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #0a0a0a;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-
-.page-overlay.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
 /* ===== BACK TO TOP ===== */
 
 .back-to-top {
