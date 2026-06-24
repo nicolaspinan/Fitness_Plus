@@ -23,6 +23,17 @@ html {
   background-color: #0a0a0a;
 }
 
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.5s;
+}
+
+
+
 /* ===== A11Y: REDUCED MOTION ===== */
 
 @media (prefers-reduced-motion: reduce) {
