@@ -82,13 +82,13 @@
       card.tabIndex = 0;
       card.addEventListener('click', function (e) {
         if (e.target.closest('.btn-pedir')) return;
-        window.location.href = 'producto.html?id=' + idx;
+        pageTransition('producto.html?id=' + idx);
       });
       card.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           if (e.target.closest('.btn-pedir')) return;
-          window.location.href = 'producto.html?id=' + idx;
+          pageTransition('producto.html?id=' + idx);
         }
       });
       card.innerHTML = `
@@ -501,6 +501,37 @@
     }
 
     window.addEventListener('scroll', updateActiveLink);
+  }
+
+  var overlay = document.querySelector('.page-overlay');
+  var TRANSITION_DURATION = 220;
+
+  window.pageTransition = function (url) {
+    if (overlay) { overlay.classList.add('active'); }
+    setTimeout(function () { window.location.href = url; }, TRANSITION_DURATION);
+  };
+
+  if (overlay) {
+    window.addEventListener('pageshow', function () {
+      overlay.classList.remove('active');
+    });
+  }
+
+  document.addEventListener('click', function (e) {
+    var link = e.target.closest('a');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('http') || href.startsWith('//') || link.hasAttribute('target')) return;
+    e.preventDefault();
+    pageTransition(href);
+  });
+
+  var btnVolver = document.getElementById('btnVolver');
+  if (btnVolver) {
+    btnVolver.addEventListener('click', function () {
+      if (overlay) overlay.classList.add('active');
+      setTimeout(function () { window.history.back(); }, TRANSITION_DURATION);
+    });
   }
 
   document.querySelectorAll('.btn-primary, .producto-card').forEach(el => {

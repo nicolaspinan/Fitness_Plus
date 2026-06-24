@@ -23,15 +23,6 @@ html {
   background-color: #0a0a0a;
 }
 
-@view-transition {
-  navigation: auto;
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.5s;
-}
-
 
 
 /* ===== A11Y: REDUCED MOTION ===== */
@@ -1009,6 +1000,23 @@ img {
 .reveal.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* ===== PAGE TRANSITION OVERLAY ===== */
+
+.page-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0a0a0a;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.page-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ===== BACK TO TOP ===== */
