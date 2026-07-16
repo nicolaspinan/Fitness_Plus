@@ -1,4 +1,26 @@
+# OS
 .DS_Store
 Thumbs.db
-*.log
+
+# Dependencies
 node_modules/
+
+# Build
+dist/
+build/
+.cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
