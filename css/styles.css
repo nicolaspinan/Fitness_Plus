@@ -660,6 +660,7 @@ img {
   color: var(--light-gray);
   line-height: 1.8;
   margin-bottom: 32px;
+  white-space: pre-line;
 }
 
 .detalle-precio {
@@ -778,6 +779,7 @@ img {
   color: var(--light-gray);
   margin-bottom: 16px;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .producto-info .precio {

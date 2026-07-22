@@ -3,7 +3,8 @@
   const fullProductos = [
     {
       nombre: 'CREATINA MYPROTEIN',
-      descripcion: 'Creatina pura en polvo sin aditivos. Ideal para aumentar masa muscular y recuperación.',
+      descripcionCorta: 'Creatina premium de estándar internacional y máxima pureza, sin aditivos.',
+      descripcion: 'Creatina premium de estándar internacional y máxima pureza. Diseñada exclusivamente para quienes no negocian la calidad de su cuerpo y buscan el máximo rendimiento biológico sin aditivos.',
       precio: 29900,
       img: 'img/Creatinas/creatina_myprotein.png',
       tabla: 'img/tablas_nutricionales/myprotein_tabla.jpeg',
@@ -12,7 +13,8 @@
     },
     {
       nombre: 'CREATINA STAR NUTRITION',
-      descripcion: 'Fórmula premium de creatina micronizada. Maximizá tu explosividad en cada serie.',
+      descripcionCorta: 'La creatina micronizada Nº1 en ventas en Argentina. Fuerza explosiva y recuperación real.',
+      descripcion: 'La creatina micronizada Nº1 en ventas y la más elegida de Argentina. Diseñada para darte la fuerza explosiva y la recuperación que tu cuerpo necesita, respaldada por la comunidad fitness que busca resultados reales sin pagar de más',
       precio: 28800,
       img: 'img/Creatinas/creatina_starnutrition.png',
       tabla: 'img/tablas_nutricionales/starnutriton_tabla.jpeg',
@@ -21,7 +23,8 @@
     },
     {
       nombre: 'CREATINA ENA',
-      descripcion: 'Creatina de alta pureza con rápida absorción. Resultados visibles en semanas.',
+      descripcionCorta: 'Alta pureza y rápida absorción, respaldada por el laboratorio líder en nutrición deportiva.',
+      descripcion: 'Creatina de alta pureza y rápida absorción respaldada por el laboratorio líder en nutrición deportiva. Diseñada bajo estrictos estándares farmacéuticos para garantizarte máxima potencia, seguridad absoluta y resultados visibles en cada entrenamiento.',
       precio: 29600,
       img: 'img/Creatinas/creatina_ena.png',
       tabla: 'img/tablas_nutricionales/ena_tabla.jpeg',
@@ -30,6 +33,7 @@
     },
     {
       nombre: 'CREATINA GOOM',
+      descripcionCorta: 'Creatina micronizada de alta pureza con rápida absorción.',
       descripcion: 'Creatina micronizada de alta pureza con rápida absorción. Potenciá tu fuerza y rendimiento al máximo.',
       precio: 39900,
       img: 'img/Creatinas/goom_creatina3.png',
@@ -39,7 +43,8 @@
     },
     {
       nombre: 'PRE-WORKOUT PREWAR',
-      descripcion: 'Explosión de energía extrema con beta-alanina y cafeína. Llevá tu entreno al límite.',
+      descripcionCorta: 'Combate la fatiga muscular y sostiene la concentración de principio a fin.',
+      descripcion: 'Fórmula equilibrada con cafeína, beta alanina y arginina elaborada bajo calidad farmacéutica. Mejora el flujo sanguíneo, combate la fatiga muscular y sostiene la concentración de principio a fin sin bajones.\n\nMáxima congestión: Favorece el bombeo y el transporte de nutrientes a los músculos.\nEnfoque mental: Mantiene tu concentración al máximo en cada serie sin bajones repentinos.',
       precio: 34400,
       img: 'img/Preentrenos/preentrenos_prewar.png',
       tabla: 'img/tablas_nutricionales/prewar_tabla.jpeg',
@@ -48,7 +53,8 @@
     },
     {
       nombre: 'PRE-WORKOUT PUMP V8',
-      descripcion: 'Pre-entreno avanzado con óxido nítrico para vascularización y pumps increíbles.',
+      descripcionCorta: 'Da energía e intensidad inmediata y aporta un enfoque mental total. Ideal para días de mucha fatiga.',
+      descripcion: 'Fórmula potente a base de estimulantes y aminoácidos. Aumenta la vasodilatación, da energía e intensidad inmediata y aporta un enfoque mental total. Ideal para días de mucha fatiga.\n\nEnergía e intensidad inmediata: Activa tu cuerpo en minutos para entrenar sin rastro de fatiga.\nVasodilatación extrema: Máxima congestión y flujo de nutrientes directo a tus músculos.\nEnfoque mental absoluto: Mantiene tu mente 100% conectada con el entrenamiento de principio a fin.',
       precio: 35500,
       img: 'img/Preentrenos/preentrenos_pumpv8_sandia.png',
       tabla: 'img/tablas_nutricionales/pump-v8_sandia_tabla.jpg',
@@ -97,7 +103,7 @@
         </div>
         <div class="producto-info">
           <h3>${p.nombre}</h3>
-          <p class="descripcion">${p.descripcion}</p>
+          <p class="descripcion">${p.descripcionCorta}</p>
           <div class="precio-row">
             <p class="precio" aria-label="Precio ${p.precio.toLocaleString('es-AR')} pesos">$${p.precio.toLocaleString('es-AR')}</p>
             <a href="https://wa.me/543518682837?text=${encodeURIComponent('Hola, quiero comprar ' + p.nombre + ' ($' + p.precio.toLocaleString('es-AR') + ')')}" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ${p.nombre} por WhatsApp">Pedir</a>
