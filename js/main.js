@@ -32,16 +32,6 @@
       marca: 'ENA'
     },
     {
-      nombre: 'CREATINA GOOM',
-      descripcionCorta: 'Creatina micronizada de alta pureza con rápida absorción.',
-      descripcion: 'Creatina micronizada de alta pureza con rápida absorción. Potenciá tu fuerza y rendimiento al máximo.',
-      precio: 39900,
-      img: 'img/Creatinas/goom_creatina3.png',
-      tabla: 'img/tablas_nutricionales/goom_tabla.png',
-      categoria: 'creatina',
-      marca: 'Goom'
-    },
-    {
       nombre: 'PRE-WORKOUT PREWAR',
       descripcionCorta: 'Combate la fatiga muscular y sostiene la concentración de principio a fin.',
       descripcion: 'Fórmula equilibrada con cafeína, beta alanina y arginina elaborada bajo calidad farmacéutica. Mejora el flujo sanguíneo, combate la fatiga muscular y sostiene la concentración de principio a fin sin bajones.\n\nMáxima congestión: Favorece el bombeo y el transporte de nutrientes a los músculos.\nEnfoque mental: Mantiene tu concentración al máximo en cada serie sin bajones repentinos.',
