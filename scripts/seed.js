@@ -22,8 +22,8 @@
  *   - categories: creatinas.html + preentrenos.html (hero/section texts)
  *   - products:   js/main.js fullProductos[] (names, prices, brands, descriptions, image paths)
  *   - site_texts: index.html (hero/section/nosotros slots)
- * Preserved on purpose: the "ESTABAS" typo in home_hero_title and the
- * "starnutriton_tabla.jpeg" filename typo.
+ * Fixed by user request (2026-08-04): "ESTABAS" → "ESTABÁS" in home_hero_title
+ * and "starnutriton_tabla.jpeg" → "starnutrition_tabla.jpeg" (file renamed).
  * NOT seeded (unreferenced leftovers): img/Creatinas/goom_*, goom_tabla.png,
  * preentrenos_pumpv8_uva.png, img/hero/*.
  */
@@ -81,7 +81,7 @@ const PRODUCTS = [
     short_desc: 'La creatina micronizada Nº1 en ventas en Argentina. Fuerza explosiva y recuperación real.',
     full_desc: 'La creatina micronizada Nº1 en ventas y la más elegida de Argentina. Diseñada para darte la fuerza explosiva y la recuperación que tu cuerpo necesita, respaldada por la comunidad fitness que busca resultados reales sin pagar de más',
     image: 'img/Creatinas/creatina_starnutrition.png',
-    nutrition_image: 'img/tablas_nutricionales/starnutriton_tabla.jpeg', // filename typo preserved verbatim
+    nutrition_image: 'img/tablas_nutricionales/starnutrition_tabla.jpeg',
     sort_order: 1,
     home_order: 2
   },
@@ -123,10 +123,10 @@ const PRODUCTS = [
   }
 ];
 
-// site_texts defaults — VERBATIM from index.html. The "ESTABAS" typo is part
-// of the current site copy and MUST be preserved (spec + design mandate).
+// site_texts defaults — VERBATIM from index.html. The hero typo was corrected
+// to "ESTABÁS" by user request; the rest is verbatim.
 const SITE_TEXTS = {
-  home_hero_title: 'EL PLUS QUE ESTABAS BUSCANDO',
+  home_hero_title: 'EL PLUS QUE ESTABÁS BUSCANDO',
   home_hero_subtitle: 'Suplementos diseñados para darte la fuerza y la recuperación que necesitás.',
   home_section_title: 'PRODUCTOS',
   home_section_subtitle: 'Lo mejor para tu rendimiento',

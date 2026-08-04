@@ -17,7 +17,7 @@
       descripcion: 'La creatina micronizada Nº1 en ventas y la más elegida de Argentina. Diseñada para darte la fuerza explosiva y la recuperación que tu cuerpo necesita, respaldada por la comunidad fitness que busca resultados reales sin pagar de más',
       precio: 28800,
       img: 'img/Creatinas/creatina_starnutrition.png',
-      tabla: 'img/tablas_nutricionales/starnutriton_tabla.jpeg',
+      tabla: 'img/tablas_nutricionales/starnutrition_tabla.jpeg',
       categoria: 'creatina',
       marca: 'Star Nutrition'
     },
