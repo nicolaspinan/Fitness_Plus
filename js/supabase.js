@@ -22,7 +22,8 @@
  *   insert(table, row, {upsert, onConflict})                           → inserted rows
  *   update(table, id, patch)                                           → updated rows
  *   remove(table, id)                                                  → deleted rows
- *   upload(bucket, path, file, {upsert})                               → upload result
+ *   upload(bucket, path, file, {upsert, timeout})                       → upload result
+ *     (default timeout 30s — uploads get more time than the 8s API default)
  *   publicUrl(bucket, path)                                            → public URL string
  *   removeObject(bucket, path)                                         → delete result
  *   SupabaseError                                                      → error constructor
@@ -32,6 +33,7 @@
 
   var SESSION_KEY = 'fitnessplus_admin_session';
   var TIMEOUT_MS = 8000; // AbortController timeout
+  var UPLOAD_TIMEOUT_MS = 30000; // uploads get more time: 2MB images on slow links
   var REFRESH_MARGIN_MS = 60 * 1000; // refresh when the token expires in < 1 min
 
   /** Typed error for every failure: configuration, network, HTTP or auth. */
@@ -112,8 +114,9 @@
 
   function request(cfg, path, opts) {
     opts = opts || {};
+    var timeoutMs = (typeof opts.timeout === 'number' && opts.timeout > 0) ? opts.timeout : TIMEOUT_MS;
     var controller = new AbortController();
-    var timer = setTimeout(function () { controller.abort(); }, TIMEOUT_MS);
+    var timer = setTimeout(function () { controller.abort(); }, timeoutMs);
 
     var headers = {
       'apikey': cfg.key,
@@ -139,7 +142,7 @@
       });
     }).catch(function (err) {
       if (err && err.name === 'AbortError') {
-        throw new SupabaseError('Request timed out after ' + (TIMEOUT_MS / 1000) + 's.', { reason: 'network' });
+        throw new SupabaseError('Request timed out after ' + (timeoutMs / 1000) + 's.', { reason: 'network' });
       }
       throw new SupabaseError('Network error: could not reach Supabase.', { reason: 'network' });
     }).finally(function () {
@@ -182,7 +185,8 @@
       token: token || cfg.key,
       headers: opts.headers,
       body: opts.body,
-      json: opts.json
+      json: opts.json,
+      timeout: opts.timeout
     }).then(function (res) {
       if (res.ok) return res.body;
       if (res.status === 401 && !retried && token) {
@@ -318,7 +322,8 @@
         'Content-Type': file.type || 'application/octet-stream',
         'x-upsert': opts.upsert ? 'true' : 'false'
       },
-      body: file
+      body: file,
+      timeout: (typeof opts.timeout === 'number' && opts.timeout > 0) ? opts.timeout : UPLOAD_TIMEOUT_MS
     });
   }
 

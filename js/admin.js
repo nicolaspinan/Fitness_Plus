@@ -65,8 +65,34 @@
     return Number(n).toLocaleString('es-AR');
   }
 
+  /** True when value parses as an absolute http/https URL. */
+  function isHttpUrl(value) {
+    try {
+      var parsed = new URL(value);
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /** Stable client-side id (crypto.randomUUID with hex fallback) so a retry
+   *  after a timeout upserts instead of duplicating the row. */
+  function newId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    var hex = '0123456789abcdef';
+    var s = '';
+    for (var i = 0; i < 32; i++) s += hex[Math.floor(Math.random() * 16)];
+    return s.replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+  }
+
   function isAuthError(err) {
-    return !!(err && window.Supabase && err instanceof window.Supabase.SupabaseError && err.reason === 'auth');
+    if (!err || !window.Supabase || !(err instanceof window.Supabase.SupabaseError)) return false;
+    if (err.reason === 'auth') return true;
+    // HTTP 401 from an authenticated call with no local session (e.g. logged
+    // out from another tab) means the session is gone: treat as auth redirect.
+    return err.status === 401 && !window.Supabase.getSession();
   }
 
   function isNetworkError(err) {
@@ -489,6 +515,9 @@
     }).catch(function (err) {
       if (isAuthError(err)) { goLogin(); return; }
       showBanner('No se pudo cambiar el orden. Intentá de nuevo.', 'error');
+      // One of the two swaps may have applied: reload state so the next move
+      // starts from the DB's real order, not a half-applied one.
+      loadCatalog().catch(function () { /* best-effort resync */ });
     });
   }
 
@@ -549,8 +578,9 @@
     if (editingCategoryId) {
       request = window.Supabase.update('categories', editingCategoryId, payload);
     } else {
+      payload.id = newId();
       payload.sort_order = nextSortOrderForCategories();
-      request = window.Supabase.insert('categories', payload);
+      request = window.Supabase.insert('categories', payload, { upsert: true, onConflict: 'id' });
     }
 
     request.then(function () {
@@ -811,6 +841,9 @@
     }).catch(function (err) {
       if (isAuthError(err)) { goLogin(); return; }
       showBanner('No se pudo cambiar el orden. Intentá de nuevo.', 'error');
+      // One of the two swaps may have applied: reload state so the next move
+      // starts from the DB's real order, not a half-applied one.
+      loadCatalog().catch(function () { /* best-effort resync */ });
     });
   }
 
@@ -834,6 +867,9 @@
     }).catch(function (err) {
       if (isAuthError(err)) { goLogin(); return; }
       showBanner('No se pudo cambiar el orden. Intentá de nuevo.', 'error');
+      // One of the two swaps may have applied: reload state so the next move
+      // starts from the DB's real order, not a half-applied one.
+      loadCatalog().catch(function () { /* best-effort resync */ });
     });
   }
 
@@ -858,6 +894,8 @@
       .then(function (confirmed) {
         if (!confirmed) return;
         window.Supabase.remove('products', id).then(function () {
+          removeStoredObject(p.image_url);
+          removeStoredObject(p.nutrition_image_url);
           showBanner('Producto eliminado.', 'success');
           renderProducts();
         }).catch(function (err) {
@@ -951,15 +989,15 @@
     if (!brand) return { error: 'Ingresá la marca.' };
     if (!categoryId) return { error: 'Elegí una categoría.' };
 
-    var price = parseInt(priceRaw, 10);
-    if (!priceRaw || isNaN(price) || price <= 0) {
+    var price = Number(priceRaw);
+    if (!priceRaw || !isFinite(price) || price <= 0 || Math.floor(price) !== price) {
       return { error: 'Ingresá un precio válido mayor a 0.' };
     }
 
     var offer = null;
     if (offerRaw) {
-      offer = parseInt(offerRaw, 10);
-      if (isNaN(offer) || offer <= 0) {
+      offer = Number(offerRaw);
+      if (!isFinite(offer) || offer <= 0 || Math.floor(offer) !== offer) {
         return { error: 'Ingresá un precio de oferta válido.' };
       }
       if (offer >= price) {
@@ -970,6 +1008,12 @@
     if (!shortDesc) return { error: 'Ingresá la descripción corta.' };
     if (!fullDesc) return { error: 'Ingresá la descripción completa.' };
     if (!imageUrl) return { error: 'Subí o pegá la URL de la imagen principal.' };
+    if (!isHttpUrl(imageUrl)) {
+      return { error: 'La URL de la imagen principal debe ser una URL válida (http/https).' };
+    }
+    if (nutritionUrl && !isHttpUrl(nutritionUrl)) {
+      return { error: 'La URL de la tabla nutricional debe ser una URL válida (http/https).' };
+    }
 
     return {
       name: name,
@@ -1007,9 +1051,10 @@
         : null;
       request = window.Supabase.update('products', editingProductId, payload);
     } else {
+      payload.id = newId();
       payload.sort_order = nextSortOrder(payload.category_id);
       payload.home_order = payload.is_featured ? nextHomeOrder() : null;
-      request = window.Supabase.insert('products', payload);
+      request = window.Supabase.insert('products', payload, { upsert: true, onConflict: 'id' });
     }
 
     request.then(function () {
@@ -1036,6 +1081,21 @@
   function safeFileName(name) {
     var cleaned = String(name || '').replace(/[^a-zA-Z0-9._-]+/g, '-');
     return cleaned || 'imagen';
+  }
+
+  /**
+   * Best-effort delete of a stored object referenced by a public URL of the
+   * `productos` bucket (used when deleting a product or replacing its image).
+   * Failures are swallowed — orphan cleanup must never block the main action.
+   */
+  function removeStoredObject(url) {
+    if (!url) return;
+    var marker = '/storage/v1/object/public/' + BUCKET + '/';
+    var idx = url.indexOf(marker);
+    if (idx === -1) return;
+    var path = url.slice(idx + marker.length);
+    try { path = decodeURIComponent(path); } catch (e) { /* keep raw path */ }
+    window.Supabase.removeObject(BUCKET, path).catch(function () { /* best-effort */ });
   }
 
   /**
@@ -1068,16 +1128,22 @@
 
       var path = 'admin/' + Date.now() + '-' + safeFileName(file.name);
       fileInput.setAttribute('disabled', 'disabled');
-      showBanner('Subiendo imagen…', 'info');
-      window.Supabase.upload(BUCKET, path, file).then(function () {
+      setBusy($('btnSaveProducto'), true, 'Subiendo imagen…');
+      window.Supabase.upload(BUCKET, path, file, { timeout: 30000 }).then(function () {
+        var previousUrl = urlInput.value.trim();
         urlInput.value = window.Supabase.publicUrl(BUCKET, path);
+        if (previousUrl) removeStoredObject(previousUrl);
         showBanner('Imagen subida correctamente.', 'success');
       }).catch(function (err) {
         if (isAuthError(err)) { goLogin(); return; }
         showBanner('No se pudo subir la imagen. Intentá de nuevo.', 'error');
+        // Never leave a preview of a file that was not saved: restore the
+        // preview to whatever the URL field currently holds.
+        setPreview(preview, urlInput.value.trim());
       }).then(function () {
         fileInput.removeAttribute('disabled');
         fileInput.value = '';
+        setBusy($('btnSaveProducto'), false, 'Guardar producto');
       });
     });
 
@@ -1150,17 +1216,7 @@
     }
 
     setBusy($('btnSaveTextos'), true, 'Guardando…');
-    var chain = Promise.resolve();
-    changed.forEach(function (item) {
-      chain = chain.then(function () {
-        return window.Supabase.insert('site_texts', { key: item.key, value: item.value }, {
-          upsert: true,
-          onConflict: 'key'
-        });
-      });
-    });
-
-    chain.then(function () {
+    window.Supabase.insert('site_texts', changed, { upsert: true, onConflict: 'key' }).then(function () {
       for (var i = 0; i < changed.length; i++) state.texts[changed[i].key] = changed[i].value;
       showBanner('Textos guardados. La página pública ya muestra los cambios.', 'success');
     }).catch(function (err) {
@@ -1181,15 +1237,18 @@
     btn.setAttribute('disabled', 'disabled');
 
     Promise.all([
-      window.Supabase.select('categories', { order: 'sort_order.asc' }),
-      window.Supabase.select('products', { order: 'sort_order.asc' }),
-      window.Supabase.select('site_texts', { order: 'key.asc' })
+      window.Supabase.select('categories', { order: 'sort_order.asc', limit: 10000 }),
+      window.Supabase.select('products', { order: 'sort_order.asc', limit: 10000 }),
+      window.Supabase.select('site_texts', { order: 'key.asc', limit: 10000 })
     ]).then(function (results) {
+      var catRows = Array.isArray(results[0]) ? results[0] : [];
+      var prodRows = Array.isArray(results[1]) ? results[1] : [];
+      var textRows = Array.isArray(results[2]) ? results[2] : [];
       var data = {
         exported_at: new Date().toISOString(),
-        categories: Array.isArray(results[0]) ? results[0] : [],
-        products: Array.isArray(results[1]) ? results[1] : [],
-        site_texts: Array.isArray(results[2]) ? results[2] : []
+        categories: { count: catRows.length, rows: catRows },
+        products: { count: prodRows.length, rows: prodRows },
+        site_texts: { count: textRows.length, rows: textRows }
       };
       var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       var objectUrl = window.URL.createObjectURL(blob);
@@ -1242,6 +1301,12 @@
     bindModal();
 
     window.addEventListener('hashchange', route);
+    // React to session changes made in another tab (logout clears
+    // fitnessplus_admin_session): re-run the auth gate so a zombie tab is
+    // kicked back to login instead of keeping a dead session.
+    window.addEventListener('storage', function (e) {
+      if (e.key === 'fitnessplus_admin_session') route();
+    });
     route();
   }
 
