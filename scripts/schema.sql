@@ -11,13 +11,13 @@
 -- to restore/rollback, re-seed with scripts/seed.js; to wipe, drop the
 -- tables/bucket manually. The RLS and storage policy sections below ARE safe to
 -- re-run (drop policy if exists / create policy) — re-run them to apply policy
--- changes, e.g. after replacing a19fb173-d3e7-487d-be0a-1cfe61908e24.
+-- changes, e.g. after replacing 4d436f61-3081-4572-8f67-375d7bdc31e5.
 --
 -- Conventions enforced here (mirrors design.md):
 --   * offer_price CHECK: offer must be null or strictly < price (DB-level rule)
 --   * category_id FK ON DELETE CASCADE: deleting a category removes its products
 --   * RLS: anonymous SELECT on all tables; INSERT/UPDATE/DELETE restricted to a
---     single admin user (a19fb173-d3e7-487d-be0a-1cfe61908e24) — see the RLS section below
+--     single admin user (4d436f61-3081-4572-8f67-375d7bdc31e5) — see the RLS section below
 --   * Storage bucket `productos`: public read; writes restricted to the admin
 --     user, paths under admin/, png/jpg/jpeg/webp, ≤ 2MB
 -- =============================================================================
@@ -66,7 +66,7 @@ create index products_featured_idx on products (is_featured, home_order) where i
 -- Row Level Security
 -- -----------------------------------------------------------------------------
 --
--- The admin user UUID below (a19fb173-d3e7-487d-be0a-1cfe61908e24) is the only
+-- The admin user UUID below (4d436f61-3081-4572-8f67-375d7bdc31e5) is the only
 -- account that can write (INSERT/UPDATE/DELETE) categories, products,
 -- site_texts and objects in the `productos` storage bucket; every other
 -- visitors are denied writes.
@@ -88,40 +88,40 @@ drop policy if exists categories_select on categories;
 create policy categories_select on categories for select using (true);
 drop policy if exists categories_insert on categories;
 create policy categories_insert on categories for insert to authenticated
-  with check (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  with check (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 drop policy if exists categories_update on categories;
 create policy categories_update on categories for update to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24')
-  with check (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5')
+  with check (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 drop policy if exists categories_delete on categories;
 create policy categories_delete on categories for delete to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 
 drop policy if exists products_select on products;
 create policy products_select on products for select using (true);
 drop policy if exists products_insert on products;
 create policy products_insert on products for insert to authenticated
-  with check (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  with check (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 drop policy if exists products_update on products;
 create policy products_update on products for update to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24')
-  with check (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5')
+  with check (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 drop policy if exists products_delete on products;
 create policy products_delete on products for delete to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 
 drop policy if exists site_texts_select on site_texts;
 create policy site_texts_select on site_texts for select using (true);
 drop policy if exists site_texts_insert on site_texts;
 create policy site_texts_insert on site_texts for insert to authenticated
-  with check (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  with check (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 drop policy if exists site_texts_update on site_texts;
 create policy site_texts_update on site_texts for update to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24')
-  with check (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5')
+  with check (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 drop policy if exists site_texts_delete on site_texts;
 create policy site_texts_delete on site_texts for delete to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
 
 -- -----------------------------------------------------------------------------
 -- Storage: bucket `productos` (public read / admin-only write)
@@ -144,7 +144,7 @@ drop policy if exists productos_auth_insert on storage.objects;
 create policy productos_auth_insert on storage.objects
   for insert to authenticated
   with check (
-    auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24'
+    auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5'
     and bucket_id = 'productos'
     and left(name, 6) = 'admin/'
     and storage.extension(name) in ('png', 'jpg', 'jpeg', 'webp')
@@ -154,9 +154,9 @@ create policy productos_auth_insert on storage.objects
 drop policy if exists productos_auth_update on storage.objects;
 create policy productos_auth_update on storage.objects
   for update to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24')
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5')
   with check (
-    auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24'
+    auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5'
     and bucket_id = 'productos'
     and left(name, 6) = 'admin/'
     and storage.extension(name) in ('png', 'jpg', 'jpeg', 'webp')
@@ -166,4 +166,4 @@ create policy productos_auth_update on storage.objects
 drop policy if exists productos_auth_delete on storage.objects;
 create policy productos_auth_delete on storage.objects
   for delete to authenticated
-  using (auth.uid() = 'a19fb173-d3e7-487d-be0a-1cfe61908e24');
+  using (auth.uid() = '4d436f61-3081-4572-8f67-375d7bdc31e5');
