@@ -16,11 +16,11 @@
  */
 (function () {
   window.SUPABASE_CONFIG = {
-    // e.g. https://abcdefghijklm.supabase.co — replace the ENTIRE value.
-    projectUrl: '<YOUR_SUPABASE_URL>',
+    // Fitness Plus Supabase project (created 2026-08-04).
+    projectUrl: 'https://vuckfanivmkhmczzvssw.supabase.co',
 
-    // Project API keys → anon public (NOT the service_role key).
-    anonKey: '<YOUR_ANON_KEY>'
+    // Publishable key (= legacy anon public key). NOT the secret key.
+    anonKey: 'sb_publishable_6HAfqFeYka_f9v6uLI2H3g_wmegRdNR'
   };
 
   // Canonical site origin — used for JSON-LD, canonical links and Open Graph.
