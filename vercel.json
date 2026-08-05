@@ -1,0 +1,14 @@
+{
+  "redirects": [
+    {
+      "source": "/creatinas.html",
+      "destination": "/categoria.html?categoria=creatinas",
+      "statusCode": 301
+    },
+    {
+      "source": "/preentrenos.html",
+      "destination": "/categoria.html?categoria=preentrenos",
+      "statusCode": 301
+    }
+  ]
+}
