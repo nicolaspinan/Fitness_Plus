@@ -7,15 +7,19 @@
 --
 --     node scripts/seed.js        (service key from .env.local, never committed)
 --
--- Re-running the file is NOT supported (objects already exist → errors), so it
--- is intentionally not wrapped in IF NOT EXISTS guards. To restore/rollback,
--- re-seed with scripts/seed.js; to wipe, drop the tables/bucket manually.
+-- Re-running the whole file is NOT supported (objects already exist → errors);
+-- to restore/rollback, re-seed with scripts/seed.js; to wipe, drop the
+-- tables/bucket manually. The RLS and storage policy sections below ARE safe to
+-- re-run (drop policy if exists / create policy) — re-run them to apply policy
+-- changes, e.g. after replacing REPLACE_WITH_ADMIN_UID.
 --
 -- Conventions enforced here (mirrors design.md):
 --   * offer_price CHECK: offer must be null or strictly < price (DB-level rule)
 --   * category_id FK ON DELETE CASCADE: deleting a category removes its products
---   * RLS: anonymous SELECT on all tables; writes only for authenticated users
---   * Storage bucket `productos`: public read, authenticated write
+--   * RLS: anonymous SELECT on all tables; INSERT/UPDATE/DELETE restricted to a
+--     single admin user (REPLACE_WITH_ADMIN_UID) — see the RLS section below
+--   * Storage bucket `productos`: public read; writes restricted to the admin
+--     user, paths under admin/, png/jpg/jpeg/webp, ≤ 2MB
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -61,46 +65,106 @@ create index products_featured_idx on products (is_featured, home_order) where i
 -- -----------------------------------------------------------------------------
 -- Row Level Security
 -- -----------------------------------------------------------------------------
+--
+-- ⚠️ BEFORE RUNNING: replace REPLACE_WITH_ADMIN_UID below with the admin user's
+-- UUID (Supabase Dashboard → Authentication → Users). Only that user can write
+-- (INSERT/UPDATE/DELETE) categories, products, site_texts and objects in the
+-- `productos` storage bucket; every other authenticated user and anonymous
+-- visitors are denied writes.
+--
+-- Public signups MUST be disabled in the dashboard (Authentication → Providers
+-- → Email → disable "Allow new users to sign up") so no second account can ever
+-- be created. Anonymous SELECT stays open so the public store keeps working.
+--
+-- Policies use drop-if-exists/create so this section can be re-run safely.
 
 alter table categories enable row level security;
 alter table products enable row level security;
 alter table site_texts enable row level security;
 
--- One SELECT policy (no role = applies to everyone, including anon) +
--- authenticated write policies per table. Anonymous writes are denied by RLS
--- even though the anon key ships in static JS (defense in depth).
+-- SELECT: one policy with no role = everyone (including anon) can read.
+-- Anonymous writes are denied by RLS even though the anon key ships in static JS.
 
+drop policy if exists categories_select on categories;
 create policy categories_select on categories for select using (true);
-create policy categories_insert on categories for insert to authenticated with check (true);
-create policy categories_update on categories for update to authenticated using (true);
-create policy categories_delete on categories for delete to authenticated using (true);
+drop policy if exists categories_insert on categories;
+create policy categories_insert on categories for insert to authenticated
+  with check (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
+drop policy if exists categories_update on categories;
+create policy categories_update on categories for update to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID')
+  with check (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
+drop policy if exists categories_delete on categories;
+create policy categories_delete on categories for delete to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
 
+drop policy if exists products_select on products;
 create policy products_select on products for select using (true);
-create policy products_insert on products for insert to authenticated with check (true);
-create policy products_update on products for update to authenticated using (true);
-create policy products_delete on products for delete to authenticated using (true);
+drop policy if exists products_insert on products;
+create policy products_insert on products for insert to authenticated
+  with check (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
+drop policy if exists products_update on products;
+create policy products_update on products for update to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID')
+  with check (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
+drop policy if exists products_delete on products;
+create policy products_delete on products for delete to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
 
+drop policy if exists site_texts_select on site_texts;
 create policy site_texts_select on site_texts for select using (true);
-create policy site_texts_insert on site_texts for insert to authenticated with check (true);
-create policy site_texts_update on site_texts for update to authenticated using (true);
-create policy site_texts_delete on site_texts for delete to authenticated using (true);
+drop policy if exists site_texts_insert on site_texts;
+create policy site_texts_insert on site_texts for insert to authenticated
+  with check (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
+drop policy if exists site_texts_update on site_texts;
+create policy site_texts_update on site_texts for update to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID')
+  with check (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
+drop policy if exists site_texts_delete on site_texts;
+create policy site_texts_delete on site_texts for delete to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
 
 -- -----------------------------------------------------------------------------
--- Storage: bucket `productos` (public read / authenticated write)
+-- Storage: bucket `productos` (public read / admin-only write)
 -- -----------------------------------------------------------------------------
 
 insert into storage.buckets (id, name, public)
 values ('productos', 'productos', true)
 on conflict (id) do nothing;
 
+drop policy if exists productos_public_read on storage.objects;
 create policy productos_public_read on storage.objects
   for select using (bucket_id = 'productos');
 
+-- Write policies: admin only, bucket `productos`, paths under admin/, image
+-- extensions only, max 2MB. `name` holds the full object path, so the 'admin/'
+-- prefix is checked with left(name, 6); `metadata->>'size'` is the byte size
+-- recorded by Supabase on upload (coalesce keeps rows without metadata safe).
+
+drop policy if exists productos_auth_insert on storage.objects;
 create policy productos_auth_insert on storage.objects
-  for insert to authenticated with check (bucket_id = 'productos');
+  for insert to authenticated
+  with check (
+    auth.uid() = 'REPLACE_WITH_ADMIN_UID'
+    and bucket_id = 'productos'
+    and left(name, 6) = 'admin/'
+    and storage.extension(name) in ('png', 'jpg', 'jpeg', 'webp')
+    and coalesce((metadata->>'size')::int, 0) <= 2097152
+  );
 
+drop policy if exists productos_auth_update on storage.objects;
 create policy productos_auth_update on storage.objects
-  for update to authenticated using (bucket_id = 'productos');
+  for update to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID')
+  with check (
+    auth.uid() = 'REPLACE_WITH_ADMIN_UID'
+    and bucket_id = 'productos'
+    and left(name, 6) = 'admin/'
+    and storage.extension(name) in ('png', 'jpg', 'jpeg', 'webp')
+    and coalesce((metadata->>'size')::int, 0) <= 2097152
+  );
 
+drop policy if exists productos_auth_delete on storage.objects;
 create policy productos_auth_delete on storage.objects
-  for delete to authenticated using (bucket_id = 'productos');
+  for delete to authenticated
+  using (auth.uid() = 'REPLACE_WITH_ADMIN_UID');
