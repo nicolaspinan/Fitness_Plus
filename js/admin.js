@@ -163,6 +163,63 @@
     });
   }
 
+  // ---- mobile nav drawer ---------------------------------------------------------
+  // Off-canvas hamburger drawer for screens ≤ 960px. Toggling the .open class
+  // slides the sidebar in/out; tapping a link or the backdrop closes it;
+  // Escape also closes it. The desktop layout (> 960px) is unaffected.
+
+  function closeMobileNav() {
+    var sidebar = $('adminSidebar');
+    var toggle = $('navToggle');
+    var backdrop = $('navBackdrop');
+    if (!sidebar || !toggle) return;
+    sidebar.classList.remove('open');
+    toggle.classList.remove('is-open');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Abrir menú');
+    if (backdrop) backdrop.classList.add('hidden');
+  }
+
+  function openMobileNav() {
+    var sidebar = $('adminSidebar');
+    var toggle = $('navToggle');
+    var backdrop = $('navBackdrop');
+    if (!sidebar || !toggle) return;
+    sidebar.classList.add('open');
+    toggle.classList.add('is-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Cerrar menú');
+    if (backdrop) backdrop.classList.remove('hidden');
+  }
+
+  function bindMobileNav() {
+    var toggle = $('navToggle');
+    var backdrop = $('navBackdrop');
+    var sidebar = $('adminSidebar');
+    if (!toggle || !backdrop || !sidebar) return;
+
+    toggle.addEventListener('click', function () {
+      if (sidebar.classList.contains('open')) closeMobileNav();
+      else openMobileNav();
+    });
+
+    backdrop.addEventListener('click', closeMobileNav);
+
+    // Close the drawer when the user picks a nav link (categorías/productos/textos/
+    // ver tienda) so they don't get trapped looking at the drawer over the content.
+    var navLinks = sidebar.querySelectorAll('.sidebar-link');
+    for (var i = 0; i < navLinks.length; i++) {
+      navLinks[i].addEventListener('click', function () {
+        // Only relevant on mobile layout; harmless on desktop (no .open ever set).
+        if (sidebar.classList.contains('open')) closeMobileNav();
+      });
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && sidebar.classList.contains('open')) closeMobileNav();
+    });
+  }
+
   // ---- busy states ---------------------------------------------------------------
 
   function setBusy(btn, busy, busyText) {
@@ -1299,6 +1356,7 @@
     bindUpload('prod-image-file', 'prod-image-url', 'prod-image-preview');
     bindUpload('prod-nutrition-file', 'prod-nutrition-url', 'prod-nutrition-preview');
     bindModal();
+    bindMobileNav();
 
     window.addEventListener('hashchange', route);
     // React to session changes made in another tab (logout clears

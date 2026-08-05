@@ -31,7 +31,16 @@
 
   <!-- ============ AUTHENTICATED SHELL ============ -->
   <div id="adminShell" class="admin-shell hidden">
-    <aside class="sidebar">
+    <!-- Mobile nav toggle (hamburguesa); visible only on small screens -->
+    <button type="button" class="nav-toggle-admin" id="navToggle" aria-label="Abrir menú" aria-expanded="false" aria-controls="adminSidebar">
+      <span class="nav-toggle-bar"></span>
+      <span class="nav-toggle-bar"></span>
+      <span class="nav-toggle-bar"></span>
+    </button>
+    <!-- Backdrop for the mobile drawer -->
+    <div id="navBackdrop" class="nav-backdrop hidden" aria-hidden="true"></div>
+
+    <aside class="sidebar" id="adminSidebar">
       <div class="sidebar-brand">
         FITNESS <span>PLUS</span>
         <small>ADMIN</small>
