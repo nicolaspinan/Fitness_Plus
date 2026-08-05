@@ -506,6 +506,7 @@ img {
   background-position: center 80%;
 }
 
+#hero-categoria .hero-overlay,
 #hero-creatinas .hero-overlay,
 #hero-preentrenos .hero-overlay {
   background:
@@ -707,6 +708,27 @@ img {
   margin-top: 8px;
 }
 
+.detalle-badges {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.detalle-badges .badge {
+  position: static;
+  display: inline-block;
+  pointer-events: auto;
+}
+
+.detalle-precio .precio-original {
+  font-family: var(--font-body);
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--light-gray);
+  margin-right: 14px;
+  vertical-align: middle;
+}
+
 .productos-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -815,6 +837,70 @@ img {
 .btn-pedir:hover {
   background: transparent;
   color: var(--black);
+}
+
+.btn-pedir.disabled,
+.btn-pedir.disabled:hover {
+  background: var(--border-gray);
+  border-color: var(--border-gray);
+  color: var(--white);
+  cursor: not-allowed;
+}
+
+/* ===== BADGES (OFERTA / AGOTADO) ===== */
+
+.badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  font-family: var(--font-title);
+  font-size: 0.75rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.badge + .badge {
+  top: 44px;
+}
+
+.badge-oferta {
+  background: var(--black);
+  color: var(--white);
+}
+
+.badge-agotado {
+  background: var(--mid-gray);
+  color: var(--white);
+}
+
+/* ===== PRECIO CON OFERTA ===== */
+
+.precio-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.precio-block .precio-original {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--light-gray);
+  line-height: 1;
+}
+
+.precio-block .precio {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.precio-block .btn-pedir {
+  margin-left: 12px;
 }
 
 /* ===== NOSOTROS / BENEFICIOS ===== */
@@ -1009,6 +1095,105 @@ img {
 
 .productos-busqueda input:focus {
   border-color: var(--black);
+}
+
+/* ===== SKELETON LOADING ===== */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--off-white);
+  border-radius: 4px;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  animation: skeletonShimmer 1.2s infinite;
+}
+
+@keyframes skeletonShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.skeleton-card {
+  background: var(--white);
+  border: 1px solid var(--border-gray);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.skeleton-img {
+  height: 210px;
+  border-radius: 0;
+}
+
+.skeleton-line {
+  height: 16px;
+  margin: 18px 18px 0;
+}
+
+.skeleton-line.w60 { width: 60%; }
+.skeleton-line.w80 { width: 80%; }
+.skeleton-line.w90 { width: 90%; }
+
+.skeleton-detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: start;
+}
+
+.skeleton-detail-img {
+  height: 460px;
+  border-radius: 12px;
+}
+
+.skeleton-detail-info {
+  padding-top: 16px;
+}
+
+.skeleton-detail-info .skeleton-line {
+  margin: 18px 0 0;
+}
+
+/* ===== ESTADOS VACÍO / ERROR ===== */
+
+.estado-vacio,
+.estado-error {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 24px;
+  color: var(--light-gray);
+  font-size: 1rem;
+}
+
+.estado-error p {
+  margin-bottom: 24px;
+}
+
+.btn-reintentar {
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font-title);
+  font-size: 0.95rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 10px 28px;
+  border: 1.5px solid var(--black);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-reintentar:hover {
+  background: transparent;
+  color: var(--black);
 }
 
 /* ===== SCROLL REVEAL ===== */
@@ -1275,6 +1460,11 @@ img {
   }
 
   .detalle-container {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .skeleton-detail {
     grid-template-columns: 1fr;
     gap: 32px;
   }
