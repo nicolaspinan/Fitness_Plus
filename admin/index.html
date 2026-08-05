@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+  <!--
+    Admin panel — Fitness Plus (change cms-fitness-plus, slice 3).
+    Standalone SPA: not linked from any public page, meta robots noindex.
+    CSP is relaxed ONLY for the Supabase origin (connect-src + img-src),
+    mirroring the public pages. All other directives stay locked down:
+    no inline scripts, no inline styles, form-action 'none'.
+  -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://vuckfanivmkhmczzvssw.supabase.co; script-src 'self'; connect-src https://vuckfanivmkhmczzvssw.supabase.co; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>Panel de Administración | Fitness Plus</title>
+  <link rel="icon" type="image/png" href="../logo/favicon_1.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha256-yIDrPSXHZdOZhAqiBP7CKzIwMQmRCJ8UeB8Jo17YC4o=" crossorigin="anonymous">
+
+  <link rel="stylesheet" href="../css/styles.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body class="admin-body">
+
+  <div id="banner" class="banner hidden" role="status" aria-live="polite"></div>
+
+  <!-- ============ AUTHENTICATED SHELL ============ -->
+  <div id="adminShell" class="admin-shell hidden">
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        FITNESS <span>PLUS</span>
+        <small>ADMIN</small>
+      </div>
+      <nav class="sidebar-nav" aria-label="Navegación del panel">
+        <a href="#/categorias" class="sidebar-link" data-view="categorias"><i class="fas fa-tags" aria-hidden="true"></i> Categorías</a>
+        <a href="#/productos" class="sidebar-link" data-view="productos"><i class="fas fa-box-open" aria-hidden="true"></i> Productos</a>
+        <a href="#/textos" class="sidebar-link" data-view="textos"><i class="fas fa-pen" aria-hidden="true"></i> Textos</a>
+        <button type="button" class="sidebar-link" id="btnExportar"><i class="fas fa-download" aria-hidden="true"></i> Exportar respaldo</button>
+      </nav>
+      <div class="sidebar-footer">
+        <a href="../index.html" class="sidebar-link" target="_blank" rel="noopener noreferrer"><i class="fas fa-store" aria-hidden="true"></i> Ver tienda</a>
+        <button type="button" class="sidebar-link" id="btnLogout"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> Cerrar sesión</button>
+      </div>
+    </aside>
+
+    <main class="admin-main" id="adminMain">
+
+      <!-- ============ CATEGORÍAS ============ -->
+      <section id="view-categorias" class="admin-view hidden" aria-labelledby="catTitle">
+        <div class="view-head">
+          <h2 class="admin-title" id="catTitle">Categorías</h2>
+          <button type="button" class="btn-admin" id="btnNuevaCategoria"><i class="fas fa-plus" aria-hidden="true"></i> Nueva categoría</button>
+        </div>
+        <div id="categoriasStatus" class="view-status"></div>
+        <div id="categoriasList" class="admin-list hidden"></div>
+
+        <form id="categoriaForm" class="panel hidden" novalidate>
+          <div class="panel-head">
+            <h3 class="panel-title" id="categoriaFormTitle">Nueva categoría</h3>
+            <button type="button" class="btn-ghost btn-small" id="btnCloseCategoria">Volver</button>
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="cat-name">Nombre</label>
+              <input type="text" id="cat-name" autocomplete="off" placeholder="Ej: Creatina">
+            </div>
+            <div class="form-field">
+              <label for="cat-slug">Slug (URL)</label>
+              <input type="text" id="cat-slug" autocomplete="off" placeholder="Ej: creatinas">
+              <small class="field-hint">Letras, números y guiones. Usado en categoria.html?categoria=…</small>
+            </div>
+            <div class="form-field">
+              <label for="cat-hero-title">Hero — título</label>
+              <input type="text" id="cat-hero-title" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="cat-hero-subtitle">Hero — subtítulo</label>
+              <input type="text" id="cat-hero-subtitle" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="cat-section-title">Sección — título</label>
+              <input type="text" id="cat-section-title" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="cat-section-subtitle">Sección — subtítulo</label>
+              <input type="text" id="cat-section-subtitle" autocomplete="off">
+            </div>
+          </div>
+          <p id="categoriaError" class="form-error hidden"></p>
+          <div class="form-actions">
+            <button type="submit" class="btn-admin" id="btnSaveCategoria">Guardar categoría</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ============ PRODUCTOS ============ -->
+      <section id="view-productos" class="admin-view hidden" aria-labelledby="prodTitle">
+        <div class="view-head">
+          <h2 class="admin-title" id="prodTitle">Productos</h2>
+          <button type="button" class="btn-admin" id="btnNuevoProducto"><i class="fas fa-plus" aria-hidden="true"></i> Nuevo producto</button>
+        </div>
+        <div class="admin-tabs" role="tablist" aria-label="Vistas de productos">
+          <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="por-categoria">Por categoría</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" data-tab="destacados">Destacados (home)</button>
+        </div>
+        <div id="productosStatus" class="view-status"></div>
+        <div id="productosByCategory" class="hidden"></div>
+        <div id="productosDestacados" class="hidden"></div>
+
+        <form id="productoForm" class="panel hidden" novalidate>
+          <div class="panel-head">
+            <h3 class="panel-title" id="productoFormTitle">Nuevo producto</h3>
+            <button type="button" class="btn-ghost btn-small" id="btnCloseProducto">Volver</button>
+          </div>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="prod-name">Nombre</label>
+              <input type="text" id="prod-name" autocomplete="off" placeholder="Ej: CREATINA MYPROTEIN">
+            </div>
+            <div class="form-field">
+              <label for="prod-brand">Marca</label>
+              <input type="text" id="prod-brand" autocomplete="off" placeholder="Ej: MyProtein">
+            </div>
+            <div class="form-field">
+              <label for="prod-category">Categoría</label>
+              <select id="prod-category"></select>
+            </div>
+            <div class="form-field">
+              <label for="prod-price">Precio (ARS)</label>
+              <input type="number" id="prod-price" min="1" step="1" inputmode="numeric" placeholder="Ej: 29900">
+            </div>
+            <div class="form-field">
+              <label for="prod-offer">Precio de oferta (ARS, opcional)</label>
+              <input type="number" id="prod-offer" min="1" step="1" inputmode="numeric" placeholder="Ej: 24900">
+              <small class="field-hint">Debe ser menor al precio original.</small>
+            </div>
+            <div class="form-field">
+              <label for="prod-short">Descripción corta</label>
+              <input type="text" id="prod-short" autocomplete="off">
+            </div>
+            <div class="form-field form-field-full">
+              <label for="prod-full">Descripción completa</label>
+              <textarea id="prod-full" rows="4"></textarea>
+            </div>
+          </div>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="prod-stock" checked>
+              <span>Disponible (en stock)</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="prod-featured">
+              <span>Destacado en la home</span>
+            </label>
+          </div>
+
+          <h3 class="panel-title">Imagen principal</h3>
+          <div class="upload-row">
+            <input type="file" id="prod-image-file" class="file-input" accept="image/png,image/jpeg,image/webp">
+            <label for="prod-image-file" class="btn-ghost file-label"><i class="fas fa-upload" aria-hidden="true"></i> Elegir archivo</label>
+            <small class="field-hint">PNG, JPG o WEBP · hasta 2MB</small>
+            <input type="url" id="prod-image-url" class="upload-url" placeholder="URL de la imagen (se completa al subir)" autocomplete="off">
+            <img id="prod-image-preview" class="upload-preview hidden" alt="Vista previa de la imagen principal">
+          </div>
+
+          <h3 class="panel-title">Tabla nutricional (opcional)</h3>
+          <div class="upload-row">
+            <input type="file" id="prod-nutrition-file" class="file-input" accept="image/png,image/jpeg,image/webp">
+            <label for="prod-nutrition-file" class="btn-ghost file-label"><i class="fas fa-upload" aria-hidden="true"></i> Elegir archivo</label>
+            <small class="field-hint">PNG, JPG o WEBP · hasta 2MB</small>
+            <input type="url" id="prod-nutrition-url" class="upload-url" placeholder="URL de la tabla nutricional (opcional)" autocomplete="off">
+            <img id="prod-nutrition-preview" class="upload-preview hidden" alt="Vista previa de la tabla nutricional">
+          </div>
+
+          <p id="productoError" class="form-error hidden"></p>
+          <div class="form-actions">
+            <button type="submit" class="btn-admin" id="btnSaveProducto">Guardar producto</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- ============ TEXTOS ============ -->
+      <section id="view-textos" class="admin-view hidden" aria-labelledby="txtTitle">
+        <div class="view-head">
+          <h2 class="admin-title" id="txtTitle">Textos del sitio</h2>
+        </div>
+        <div id="textosStatus" class="view-status"></div>
+
+        <form id="textosForm" class="panel hidden" novalidate>
+          <h3 class="panel-title">Home — Hero y sección de productos</h3>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="txt-hero-title">Hero — título</label>
+              <input type="text" id="txt-hero-title" data-text-key="home_hero_title" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="txt-hero-subtitle">Hero — subtítulo</label>
+              <input type="text" id="txt-hero-subtitle" data-text-key="home_hero_subtitle" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="txt-section-title">Sección productos — título</label>
+              <input type="text" id="txt-section-title" data-text-key="home_section_title" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="txt-section-subtitle">Sección productos — subtítulo</label>
+              <input type="text" id="txt-section-subtitle" data-text-key="home_section_subtitle" autocomplete="off">
+            </div>
+          </div>
+
+          <h3 class="panel-title">Nosotros</h3>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="txt-nosotros-title">Título</label>
+              <input type="text" id="txt-nosotros-title" data-text-key="nosotros_title" autocomplete="off">
+            </div>
+            <div class="form-field">
+              <label for="txt-nosotros-subtitle">Subtítulo</label>
+              <input type="text" id="txt-nosotros-subtitle" data-text-key="nosotros_subtitle" autocomplete="off">
+            </div>
+          </div>
+          <div class="benefit-grid">
+            <div class="benefit-card-admin">
+              <h4 class="benefit-title">Beneficio 1</h4>
+              <div class="form-field">
+                <label for="txt-benefit-1-title">Título</label>
+                <input type="text" id="txt-benefit-1-title" data-text-key="nosotros_benefit_1_title" autocomplete="off">
+              </div>
+              <div class="form-field">
+                <label for="txt-benefit-1-text">Texto</label>
+                <textarea id="txt-benefit-1-text" data-text-key="nosotros_benefit_1_text" rows="3"></textarea>
+              </div>
+            </div>
+            <div class="benefit-card-admin">
+              <h4 class="benefit-title">Beneficio 2</h4>
+              <div class="form-field">
+                <label for="txt-benefit-2-title">Título</label>
+                <input type="text" id="txt-benefit-2-title" data-text-key="nosotros_benefit_2_title" autocomplete="off">
+              </div>
+              <div class="form-field">
+                <label for="txt-benefit-2-text">Texto</label>
+                <textarea id="txt-benefit-2-text" data-text-key="nosotros_benefit_2_text" rows="3"></textarea>
+              </div>
+            </div>
+            <div class="benefit-card-admin">
+              <h4 class="benefit-title">Beneficio 3</h4>
+              <div class="form-field">
+                <label for="txt-benefit-3-title">Título</label>
+                <input type="text" id="txt-benefit-3-title" data-text-key="nosotros_benefit_3_title" autocomplete="off">
+              </div>
+              <div class="form-field">
+                <label for="txt-benefit-3-text">Texto</label>
+                <textarea id="txt-benefit-3-text" data-text-key="nosotros_benefit_3_text" rows="3"></textarea>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="panel-title">Home — Productos destacados</h3>
+          <div class="form-grid">
+            <div class="form-field">
+              <label for="txt-featured-max">Máximo de destacados en home (1 a 6)</label>
+              <input type="number" id="txt-featured-max" data-text-key="home_featured_max" min="1" max="6" step="1" inputmode="numeric">
+            </div>
+          </div>
+
+          <p id="textosError" class="form-error hidden"></p>
+          <div class="form-actions">
+            <button type="submit" class="btn-admin" id="btnSaveTextos">Guardar textos</button>
+          </div>
+        </form>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ============ LOGIN VIEW (standalone) ============ -->
+  <section id="view-login" class="admin-view view-login hidden" aria-labelledby="loginTitle">
+    <div class="login-card">
+      <div class="login-brand">
+        <img src="../img/logo.png" alt="Fitness Plus" class="login-logo">
+        <h1 id="loginTitle" class="login-title">Fitness Plus <span>Admin</span></h1>
+      </div>
+      <form id="loginForm" novalidate>
+        <div class="form-field">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" autocomplete="username" placeholder="admin@fitnessplus.com">
+        </div>
+        <div class="form-field">
+          <label for="loginPassword">Contraseña</label>
+          <input type="password" id="loginPassword" autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <p id="loginError" class="form-error hidden" role="alert"></p>
+        <button type="submit" class="btn-admin btn-block" id="loginSubmit">Ingresar</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ============ CONFIRM MODAL ============ -->
+  <div id="confirmModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="confirmMessage">
+    <div class="modal-backdrop" data-modal-close></div>
+    <div class="modal-card">
+      <p id="confirmMessage" class="modal-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-modal-close id="confirmCancel">Cancelar</button>
+        <button type="button" class="btn-danger" id="confirmOk">Eliminar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/site-config.js"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>
