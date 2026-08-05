@@ -70,6 +70,17 @@
 
   // ---- small helpers ----------------------------------------------------------
 
+  /** HTML-escape a value before interpolating it into innerHTML markup. */
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function text(key, fallback) {
     var value = state.texts[key];
     return (value === undefined || value === null || value === '') ? fallback : value;
@@ -173,27 +184,27 @@
     var precioRow;
     if (p.offer_price != null) {
       precioRow = '<div class="precio-block">' +
-        '<s class="precio-original">$' + formatPrice(p.price) + '</s>' +
-        '<p class="precio" aria-label="Precio ' + formatPrice(precio) + ' pesos">$' + formatPrice(precio) + '</p>' +
+        '<s class="precio-original">$' + escapeHtml(formatPrice(p.price)) + '</s>' +
+        '<p class="precio" aria-label="Precio ' + escapeHtml(formatPrice(precio)) + ' pesos">$' + escapeHtml(formatPrice(precio)) + '</p>' +
         '</div>';
     } else {
-      precioRow = '<p class="precio" aria-label="Precio ' + formatPrice(precio) + ' pesos">$' + formatPrice(precio) + '</p>';
+      precioRow = '<p class="precio" aria-label="Precio ' + escapeHtml(formatPrice(precio)) + ' pesos">$' + escapeHtml(formatPrice(precio)) + '</p>';
     }
 
     var pedir;
     if (p.in_stock) {
-      pedir = '<a href="' + waLink(p) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ' + p.name + ' por WhatsApp">Pedir</a>';
+      pedir = '<a href="' + waLink(p) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ' + escapeHtml(p.name) + ' por WhatsApp">Pedir</a>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1">Pedir</span>';
     }
 
     return '<div class="producto-img">' +
-      '<img src="' + p.image_url + '" alt="' + p.name + '" loading="lazy" width="400" height="240">' +
+      '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.name) + '" loading="lazy" width="400" height="240">' +
       badges +
       '</div>' +
       '<div class="producto-info">' +
-      '<h3>' + p.name + '</h3>' +
-      '<p class="descripcion">' + p.short_desc + '</p>' +
+      '<h3>' + escapeHtml(p.name) + '</h3>' +
+      '<p class="descripcion">' + escapeHtml(p.short_desc) + '</p>' +
       '<div class="precio-row">' + precioRow + pedir + '</div>' +
       '</div>';
   }
@@ -463,10 +474,10 @@
 
     var precioHtml;
     if (p.offer_price != null) {
-      precioHtml = '<s class="precio-original">$' + formatPrice(p.price) + '</s>' +
-        '<span class="precio-oferta">$' + formatPrice(p.offer_price) + '</span>';
+      precioHtml = '<s class="precio-original">$' + escapeHtml(formatPrice(p.price)) + '</s>' +
+        '<span class="precio-oferta">$' + escapeHtml(formatPrice(p.offer_price)) + '</span>';
     } else {
-      precioHtml = '$' + formatPrice(p.price);
+      precioHtml = '$' + escapeHtml(formatPrice(p.price));
     }
 
     var pedir;
@@ -480,8 +491,8 @@
       '<div class="detalle-imagen" id="detalleImagen">' + buildSliderHtml(p) + '</div>' +
       '<div class="detalle-info">' +
       badgesHtml +
-      '<h2 id="detalleNombre">' + p.name + '</h2>' +
-      '<p class="detalle-descripcion" id="detalleDescripcion">' + p.full_desc + '</p>' +
+      '<h2 id="detalleNombre">' + escapeHtml(p.name) + '</h2>' +
+      '<p class="detalle-descripcion" id="detalleDescripcion">' + escapeHtml(p.full_desc) + '</p>' +
       '<div class="detalle-precio-row">' +
       '<p class="detalle-precio" id="detallePrecio">' + precioHtml + '</p>' +
       pedir +
@@ -496,21 +507,21 @@
   /** Slider markup — the pre-cutover 4-slide clone pattern, verbatim. */
   function buildSliderHtml(p) {
     if (!p.nutrition_image_url) {
-      return '<img src="' + p.image_url + '" alt="' + p.name + '" loading="lazy" width="600" height="600">';
+      return '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.name) + '" loading="lazy" width="600" height="600">';
     }
     return '<div class="detalle-slider">' +
       '<div class="detalle-slider-track" id="sliderTrack">' +
       '<div class="detalle-slide" id="slide-clone-tabla">' +
-      '<img src="' + p.nutrition_image_url + '" alt="Tabla nutricional de ' + p.name + '" loading="lazy">' +
+      '<img src="' + escapeHtml(p.nutrition_image_url) + '" alt="Tabla nutricional de ' + escapeHtml(p.name) + '" loading="lazy">' +
       '</div>' +
       '<div class="detalle-slide" id="slide-producto">' +
-      '<img src="' + p.image_url + '" alt="' + p.name + '" loading="lazy" width="600" height="600">' +
+      '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.name) + '" loading="lazy" width="600" height="600">' +
       '</div>' +
       '<div class="detalle-slide" id="slide-tabla">' +
-      '<img src="' + p.nutrition_image_url + '" alt="Tabla nutricional de ' + p.name + '" loading="lazy">' +
+      '<img src="' + escapeHtml(p.nutrition_image_url) + '" alt="Tabla nutricional de ' + escapeHtml(p.name) + '" loading="lazy">' +
       '</div>' +
       '<div class="detalle-slide" id="slide-clone-producto">' +
-      '<img src="' + p.image_url + '" alt="' + p.name + '" loading="lazy" width="600" height="600">' +
+      '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.name) + '" loading="lazy" width="600" height="600">' +
       '</div>' +
       '</div>' +
       '<button class="detalle-arrow prev" id="slidePrev" aria-label="Anterior">&#10094;</button>' +
@@ -730,8 +741,12 @@
   function renderError() {
     if (page === 'producto.html') {
       showErrorDetail();
+      setText('productoNombre', 'No pudimos cargar el producto');
+      document.title = 'Error | Fitness Plus';
     } else if (page === 'index.html' || page === 'categoria.html') {
       showErrorGrid();
+      setText('categoria-hero-title', 'No pudimos cargar la categoría');
+      document.title = 'Error | Fitness Plus';
     }
     // 404 and unknown pages: navbar is the only dynamic part, nothing else to do.
   }
