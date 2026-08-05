@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="es-AR">
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data:; script-src 'self' 'unsafe-inline'; connect-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://vuckfanivmkhmczzvssw.supabase.co; script-src 'self' 'unsafe-inline'; connect-src https://vuckfanivmkhmczzvssw.supabase.co; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Suplementos Deportivos Premium | Creatina y Pre-Entreno — Fitness Plus</title>
@@ -83,7 +83,7 @@
       <div class="hero-overlay" aria-hidden="true"></div>
       <div class="container hero-content">
         <h1 id="hero-title">EL PLUS QUE ESTABÁS BUSCANDO</h1>
-        <p>Suplementos diseñados para darte la fuerza y la recuperación que necesitás.</p>
+        <p id="hero-subtitle">Suplementos diseñados para darte la fuerza y la recuperación que necesitás.</p>
         <a href="#productos" class="btn-primary">Ver productos</a>
       </div>
     </section>
@@ -91,7 +91,7 @@
     <section class="productos" id="productos" aria-labelledby="productos-title">
       <div class="container">
         <h2 class="section-title reveal" id="productos-title">PRODUCTOS</h2>
-        <p class="section-subtitle reveal">Lo mejor para tu rendimiento</p>
+        <p class="section-subtitle reveal" id="productos-subtitle">Lo mejor para tu rendimiento</p>
         <div class="productos-busqueda reveal">
           <label for="buscador" class="visually-hidden">Buscar producto</label>
           <input type="text" id="buscador" placeholder="Buscá tu producto...">
@@ -103,28 +103,28 @@
     <section class="nosotros" id="nosotros" aria-labelledby="nosotros-title">
       <div class="container">
         <h2 class="section-title reveal" id="nosotros-title">POR QUÉ ELEGIRNOS</h2>
-        <p class="section-subtitle reveal">Somos tu mejor opción</p>
+        <p class="section-subtitle reveal" id="nosotros-subtitle">Somos tu mejor opción</p>
         <div class="beneficios-grid">
           <div class="beneficio-card reveal">
             <div class="beneficio-icono" aria-hidden="true">
               <i class="fas fa-user"></i>
             </div>
-            <h3>Contactanos</h3>
-            <p>Escribinos por WhatsApp o Instagram para hacer tus pedidos. Te atendemos personalmente.</p>
+            <h3 id="nosotros-benefit-1-title">Contactanos</h3>
+            <p id="nosotros-benefit-1-text">Escribinos por WhatsApp o Instagram para hacer tus pedidos. Te atendemos personalmente.</p>
           </div>
           <div class="beneficio-card reveal">
             <div class="beneficio-icono" aria-hidden="true">
               <i class="fas fa-award"></i>
             </div>
-            <h3>Calidad Garantizada</h3>
-            <p>Todos nuestros productos cuentan con certificación y están avalados por profesionales del deporte.</p>
+            <h3 id="nosotros-benefit-2-title">Calidad Garantizada</h3>
+            <p id="nosotros-benefit-2-text">Todos nuestros productos cuentan con certificación y están avalados por profesionales del deporte.</p>
           </div>
           <div class="beneficio-card reveal">
             <div class="beneficio-icono" aria-hidden="true">
               <i class="fas fa-headset"></i>
             </div>
-            <h3>Asesoramiento</h3>
-            <p>Te ayudamos en la elección de suplementos según tus objetivos. No dudes en contactarnos.</p>
+            <h3 id="nosotros-benefit-3-title">Asesoramiento</h3>
+            <p id="nosotros-benefit-3-text">Te ayudamos en la elección de suplementos según tus objetivos. No dudes en contactarnos.</p>
           </div>
         </div>
       </div>
@@ -148,6 +148,9 @@
 
   <button class="back-to-top" id="backToTop" aria-label="Volver arriba"><i class="fas fa-chevron-up" aria-hidden="true"></i></button>
 
+  <script src="js/site-config.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/catalog.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
