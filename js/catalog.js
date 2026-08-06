@@ -203,11 +203,17 @@
     }
 
     var pedir;
+    var cartBtn = '';
     if (p.in_stock) {
       pedir = '<a href="' + waLink(p) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ' + escapeHtml(p.name) + ' por WhatsApp">Pedir</a>';
+      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '">Agregar</button>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1">Pedir</span>';
     }
+
+    // In-stock cards group Pedir + cart button in a flex .btn-group; the
+    // out-of-stock card keeps the disabled Pedir alone (previous markup).
+    var actionRow = p.in_stock ? '<div class="btn-group">' + pedir + cartBtn + '</div>' : pedir;
 
     return '<div class="producto-img">' +
       '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.name) + '" loading="lazy" width="400" height="240">' +
@@ -216,7 +222,7 @@
       '<div class="producto-info">' +
       '<h3>' + escapeHtml(p.name) + '</h3>' +
       '<p class="descripcion">' + escapeHtml(p.short_desc) + '</p>' +
-      '<div class="precio-row">' + precioRow + pedir + '</div>' +
+      '<div class="precio-row">' + precioRow + actionRow + '</div>' +
       '</div>';
   }
 
@@ -243,13 +249,13 @@
     card.setAttribute('aria-label', product.name + ' — $' + formatPrice(precio));
     card.tabIndex = 0;
     card.addEventListener('click', function (e) {
-      if (e.target.closest('.btn-pedir')) return;
+      if (e.target.closest('.btn-pedir, .btn-cart')) return;
       window.location.href = 'producto.html?id=' + product.id;
     });
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        if (e.target.closest('.btn-pedir')) return;
+        if (e.target.closest('.btn-pedir, .btn-cart')) return;
         window.location.href = 'producto.html?id=' + product.id;
       }
     });
@@ -260,6 +266,19 @@
     else card.classList.add('visible');
     return card;
   }
+
+  // ---- cart button delegation -------------------------------------------------
+  // One document-level listener for .btn-cart (mirrors main.js:85) so adds
+  // survive card/detail re-renders via innerHTML. The card click/keydown
+  // guards above already ignore .btn-cart, so no navigation happens here.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('.btn-cart');
+    if (!btn) return;
+    e.stopPropagation();
+    if (window.FPCart && window.FPCart.add) {
+      window.FPCart.add(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+    }
+  });
 
   // ---- navbar -------------------------------------------------------------------
 
@@ -497,11 +516,15 @@
     }
 
     var pedir;
+    var cartBtn = '';
     if (p.in_stock) {
       pedir = '<a href="' + waLink(p) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" id="btnPedirDetalle">Pedir</a>';
+      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '">Agregar</button>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1" id="btnPedirDetalle">Pedir</span>';
     }
+
+    var actionRow = p.in_stock ? '<div class="btn-group">' + pedir + cartBtn + '</div>' : pedir;
 
     return '<div class="container detalle-container">' +
       '<div class="detalle-imagen" id="detalleImagen">' + buildSliderHtml(p) + '</div>' +
@@ -511,7 +534,7 @@
       '<p class="detalle-descripcion" id="detalleDescripcion">' + escapeHtml(p.full_desc) + '</p>' +
       '<div class="detalle-precio-row">' +
       '<p class="detalle-precio" id="detallePrecio">' + precioHtml + '</p>' +
-      pedir +
+      actionRow +
       '</div>' +
       '<div class="detalle-actions">' +
       '<a href="javascript:history.back()" class="btn-volver"><i class="fas fa-arrow-left" aria-hidden="true"></i> Volver</a>' +
@@ -778,6 +801,11 @@
         renderProducto();
       } else if (page === 'index.html' || page === '' || page === undefined) {
         renderHome();
+      }
+      // Reconcile stored cart names against the live catalog (SC-01): replace
+      // stale names and flag out-of-stock items for the cart message.
+      if (window.FPCart && window.FPCart.reconcile) {
+        window.FPCart.reconcile(state.products);
       }
     }).catch(function (err) {
       if (err && err.message) console.error('[catalog.js] ' + err.message);
