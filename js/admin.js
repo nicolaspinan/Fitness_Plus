@@ -536,22 +536,33 @@
       meta.textContent = 'slug: ' + cat.slug + ' · ' + count + ' producto' + (count === 1 ? '' : 's') +
         ' · orden ' + cat.sort_order;
 
-      var actions = [];
-      actions.push(iconButton('fas fa-chevron-up', 'Mover ' + cat.name + ' hacia arriba', function () {
-        moveCategory(cat.id, -1);
-      }));
-      actions.push(iconButton('fas fa-chevron-down', 'Mover ' + cat.name + ' hacia abajo', function () {
-        moveCategory(cat.id, 1);
-      }));
-      actions.push(iconButton('fas fa-pen', 'Editar ' + cat.name, function () {
-        openCategoryForm(cat.id);
-      }));
-      actions.push(iconButton('fas fa-trash', 'Eliminar ' + cat.name, function () {
-        deleteCategory(cat.id);
-      }, 'danger'));
+      var actions = categoryRowActions(cat);
 
       listEl.appendChild(makeRow(null, title, meta, actions));
     }
+  }
+
+  /**
+   * Build the action buttons for a category row. Receives the category as a
+   * parameter (not via a loop closure) so each row's buttons act on their own
+   * category — ES5 has no block scope, so closures inside a `for` would all
+   * capture the last item.
+   */
+  function categoryRowActions(cat) {
+    return [
+      iconButton('fas fa-chevron-up', 'Mover ' + cat.name + ' hacia arriba', function () {
+        moveCategory(cat.id, -1);
+      }),
+      iconButton('fas fa-chevron-down', 'Mover ' + cat.name + ' hacia abajo', function () {
+        moveCategory(cat.id, 1);
+      }),
+      iconButton('fas fa-pen', 'Editar ' + cat.name, function () {
+        openCategoryForm(cat.id);
+      }),
+      iconButton('fas fa-trash', 'Eliminar ' + cat.name, function () {
+        deleteCategory(cat.id);
+      }, 'danger')
+    ];
   }
 
   function moveCategory(id, dir) {
@@ -807,6 +818,17 @@
     return actions;
   }
 
+  /**
+   * Build the move handlers for a product row. Receives the product as a
+   * parameter (not via a loop closure) so each row moves its own product.
+   */
+  function productMoveActions(p, moveFn) {
+    return {
+      moveUp: function () { moveFn(p.id, -1); },
+      moveDown: function () { moveFn(p.id, 1); }
+    };
+  }
+
   function renderProductsByCategory() {
     var wrap = $('productosByCategory');
     wrap.innerHTML = '';
@@ -839,10 +861,7 @@
         var title = document.createElement('div');
         title.className = 'row-title';
         title.textContent = p.name;
-        var row = makeRow(makeThumb(p.image_url, p.name), title, productMetaEl(p), productRowActions(p, {
-          moveUp: function () { moveProduct(p.id, -1); },
-          moveDown: function () { moveProduct(p.id, 1); }
-        }));
+        var row = makeRow(makeThumb(p.image_url, p.name), title, productMetaEl(p), productRowActions(p, productMoveActions(p, moveProduct)));
         group.appendChild(row);
       }
       wrap.appendChild(group);
@@ -883,10 +902,7 @@
       order.textContent = 'posición ' + (p.home_order != null ? p.home_order : '-');
       meta.appendChild(order);
 
-      var row = makeRow(makeThumb(p.image_url, p.name), titleEl, meta, productRowActions(p, {
-        moveUp: function () { moveFeatured(p.id, -1); },
-        moveDown: function () { moveFeatured(p.id, 1); }
-      }));
+      var row = makeRow(makeThumb(p.image_url, p.name), titleEl, meta, productRowActions(p, productMoveActions(p, moveFeatured)));
       group.appendChild(row);
     }
     wrap.appendChild(group);
