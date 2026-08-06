@@ -1269,7 +1269,7 @@ img {
 }
 
 .cart-fab:hover {
-  background: var(--white);
+  background: transparent;
   border-color: var(--black);
   color: var(--black);
   transform: translateY(-3px);
