@@ -328,6 +328,13 @@
     };
 
     fab.addEventListener('click', openDrawer);
+    // Hide the FAB over the hero; reveal it once the user scrolls past one
+    // viewport height (the .hero is min-height: 100svh).
+    function onFabScroll() {
+      fab.classList.toggle('visible', window.scrollY >= window.innerHeight);
+    }
+    window.addEventListener('scroll', onFabScroll, { passive: true });
+    onFabScroll();
     closeBtn.addEventListener('click', closeDrawer);
     scrim.addEventListener('click', closeDrawer);
     drawer.addEventListener('click', onDrawerClick);
@@ -489,7 +496,9 @@
     ui.fab.setAttribute('aria-expanded', 'false');
     ui.drawer.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('cart-lock');
-    ui.fab.focus();
+    // Only return focus if the FAB is visible (it may be hidden when the
+    // drawer is closed at the top of the page in some future entry point).
+    if (ui.fab.classList.contains('visible')) ui.fab.focus();
   }
 
   /** ESC closes the drawer; Tab is trapped inside it (a11y, SC-06). */
