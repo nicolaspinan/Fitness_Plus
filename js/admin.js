@@ -40,6 +40,10 @@
   };
 
   var editingCategoryId = null;
+  // Tracks the hero URL the category had when its form was opened, so that an
+  // explicitly removed hero object is only deleted from storage AFTER the
+  // database row stops referencing it (safe against canceling the form).
+  var previousCategoryHeroUrl = null;
   var editingProductId = null;
   var bannerTimer = null;
   var modalResolver = null;
@@ -592,8 +596,10 @@
     $('cat-section-subtitle').value = cat ? cat.section_subtitle : '';
 
     var heroUrl = cat && cat.hero_image_url ? cat.hero_image_url : '';
+    previousCategoryHeroUrl = heroUrl;
     $('cat-hero-url').value = heroUrl;
     setPreview($('cat-hero-preview'), heroUrl);
+    $('btnCatHeroRemove').classList.toggle('hidden', !heroUrl);
 
     $('categoriasList').classList.add('hidden');
     setStatus($('categoriasStatus'), 'hidden');
@@ -605,9 +611,22 @@
   function closeCategoryForm() {
     $('categoriaForm').classList.add('hidden');
     editingCategoryId = null;
+    previousCategoryHeroUrl = null;
     $('cat-hero-file').value = '';
     $('cat-hero-url').value = '';
     setPreview($('cat-hero-preview'), '');
+    $('btnCatHeroRemove').classList.add('hidden');
+  }
+
+  function removeCategoryHeroImage() {
+    // Busy (uploading or saving): an in-flight upload would overwrite the URL
+    // right after we clear it, resurrecting the image. Ignore the click.
+    if ($('btnSaveCategoria').hasAttribute('disabled')) return;
+    $('cat-hero-url').value = '';
+    setPreview($('cat-hero-preview'), '');
+    $('btnCatHeroRemove').classList.add('hidden');
+    // The stored object is deleted only after a successful save (see
+    // handleCategorySubmit) so canceling the form never orphans a broken URL.
   }
 
   function handleCategorySubmit(e) {
@@ -654,6 +673,11 @@
     }
 
     request.then(function () {
+      if (previousCategoryHeroUrl && heroImageUrl !== previousCategoryHeroUrl) {
+        // The image was removed or replaced: the row no longer references the
+        // old object, so it can be cleaned up (best-effort, must never block).
+        removeStoredObject(previousCategoryHeroUrl);
+      }
       showBanner(editingCategoryId ? 'Categoría actualizada.' : 'Categoría creada.', 'success');
       closeCategoryForm();
       renderCategories();
@@ -1173,7 +1197,7 @@
    * Preview via FileReader.readAsDataURL (data: URL — allowed by img-src data:).
    * URL.createObjectURL is NEVER used for image previews.
    */
-  function bindUpload(fileInputId, urlInputId, previewId, busyButtonId) {
+  function bindUpload(fileInputId, urlInputId, previewId, busyButtonId, removeButtonId) {
     busyButtonId = busyButtonId || 'btnSaveProducto';
     var fileInput = $(fileInputId);
     var urlInput = $(urlInputId);
@@ -1204,6 +1228,7 @@
         var previousUrl = urlInput.value.trim();
         urlInput.value = window.Supabase.publicUrl(BUCKET, path);
         if (previousUrl) removeStoredObject(previousUrl);
+        if (removeButtonId) $(removeButtonId).classList.remove('hidden');
         showBanner('Imagen subida correctamente.', 'success');
       }).catch(function (err) {
         if (isAuthError(err)) { goLogin(); return; }
@@ -1211,6 +1236,7 @@
         // Never leave a preview of a file that was not saved: restore the
         // preview to whatever the URL field currently holds.
         setPreview(preview, urlInput.value.trim());
+        if (removeButtonId) $(removeButtonId).classList.toggle('hidden', !urlInput.value.trim());
       }).then(function () {
         fileInput.removeAttribute('disabled');
         fileInput.value = '';
@@ -1359,6 +1385,7 @@
       renderCategories();
     });
     $('categoriaForm').addEventListener('submit', handleCategorySubmit);
+    $('btnCatHeroRemove').addEventListener('click', removeCategoryHeroImage);
     $('btnNuevoProducto').addEventListener('click', function () { openProductForm(null); });
     $('btnCloseProducto').addEventListener('click', function () {
       closeProductForm();
@@ -1369,7 +1396,7 @@
     bindProductTabs();
     bindUpload('prod-image-file', 'prod-image-url', 'prod-image-preview');
     bindUpload('prod-nutrition-file', 'prod-nutrition-url', 'prod-nutrition-preview');
-    bindUpload('cat-hero-file', 'cat-hero-url', 'cat-hero-preview', 'btnSaveCategoria');
+    bindUpload('cat-hero-file', 'cat-hero-url', 'cat-hero-preview', 'btnSaveCategoria', 'btnCatHeroRemove');
     bindModal();
     bindMobileNav();
 

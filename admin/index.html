@@ -106,9 +106,10 @@
             <div class="upload-row">
               <input type="file" id="cat-hero-file" class="file-input" accept="image/png,image/jpeg,image/webp">
               <label for="cat-hero-file" class="btn-ghost file-label"><i class="fas fa-upload" aria-hidden="true"></i> Elegir archivo</label>
-              <small class="field-hint">PNG, JPG o WEBP · hasta 2MB. Tamaño ideal 1920×500 o similar, paisaje.</small>
+              <small class="field-hint">PNG, JPG o WEBP · hasta 2MB. Tamaño ideal 1920×500 o similar, paisaje. Sin imagen, se muestra la predeterminada del hero principal.</small>
               <input type="url" id="cat-hero-url" class="upload-url" placeholder="URL del hero (se completa al subir)" autocomplete="off" readonly>
               <img id="cat-hero-preview" class="upload-preview hidden" alt="Vista previa del hero">
+              <button type="button" class="btn-ghost btn-small hidden" id="btnCatHeroRemove"><i class="fas fa-trash-alt" aria-hidden="true"></i> Eliminar imagen</button>
             </div>
           </div>
 
