@@ -847,7 +847,7 @@ img {
   cursor: not-allowed;
 }
 
-/* ===== BADGES (OFERTA / AGOTADO) ===== */
+/* ===== BADGES (OFERTA / SIN STOCK) ===== */
 
 .badge {
   position: absolute;

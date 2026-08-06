@@ -14,7 +14,7 @@
  * (producto.html?id=<uuid>).
  *
  * Card markup is byte-identical to the previous static renderCards() output
- * (js/main.js, pre-cutover) — the ONLY additions are the OFERTA/AGOTADO badges
+ * (js/main.js, pre-cutover) — the ONLY additions are the OFERTA/SIN STOCK badges
  * and the offer price row (.precio-block / .precio-original), so the visual
  * design stays unchanged. Regular cards produce the exact same DOM as before.
  *
@@ -183,14 +183,14 @@
   /**
    * Card template — byte-identical to the pre-cutover renderCards() innerHTML.
    * Additions ONLY (spec product-catalog): OFERTA badge + struck original price
-   * when offer_price is set; AGOTADO badge + disabled .btn-pedir when out of
+   * when offer_price is set; SIN STOCK badge + disabled .btn-pedir when out of
    * stock. Regular (in-stock, no offer) cards keep the exact previous markup.
    */
   function cardTemplate(p) {
     var precio = (p.offer_price != null) ? p.offer_price : p.price;
     var badges = '';
     if (p.offer_price != null) badges += '<span class="badge badge-oferta">OFERTA</span>';
-    if (!p.in_stock) badges += '<span class="badge badge-agotado">AGOTADO</span>';
+    if (!p.in_stock) badges += '<span class="badge badge-agotado">SIN STOCK</span>';
 
     var precioRow;
     if (p.offer_price != null) {
@@ -506,7 +506,7 @@
   function buildDetailMarkup(p) {
     var badges = '';
     if (p.offer_price != null) badges += '<span class="badge badge-oferta">OFERTA</span>';
-    if (!p.in_stock) badges += '<span class="badge badge-agotado">AGOTADO</span>';
+    if (!p.in_stock) badges += '<span class="badge badge-agotado">SIN STOCK</span>';
     var badgesHtml = badges ? '<div class="detalle-badges">' + badges + '</div>' : '';
 
     var precioHtml;

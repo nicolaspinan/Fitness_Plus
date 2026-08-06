@@ -750,7 +750,7 @@
     if (!p.in_stock) {
       var out = document.createElement('span');
       out.className = 'row-badge badge-agotado';
-      out.textContent = 'AGOTADO';
+      out.textContent = 'SIN STOCK';
       meta.appendChild(out);
     }
     if (p.offer_price != null) {
