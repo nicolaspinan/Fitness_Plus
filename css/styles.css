@@ -143,6 +143,12 @@ section[id],
   scroll-margin-top: 140px;
 }
 
+/* Cross-fade between pages (Chrome/Edge 126+, Safari 18+, Android).
+   Browsers without View Transitions ignore this and navigate normally. */
+@view-transition {
+  navigation: auto;
+}
+
 /* ===== NAVBAR ===== */
 
 .navbar {
