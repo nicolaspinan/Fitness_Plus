@@ -1251,24 +1251,27 @@ img {
   position: fixed;
   bottom: 90px;
   right: 30px;
-  width: 56px;
-  height: 56px;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
   border-radius: 50%;
   background: #005fcc;
   color: var(--white);
-  border: none;
+  border: 2px solid transparent;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.35rem;
+  font-size: 1.2rem;
   z-index: 950;
   box-shadow: 0 4px 15px rgba(0, 95, 204, 0.45);
-  transition: transform 0.3s ease, background 0.3s ease;
+  transition: transform 0.3s ease, background 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .cart-fab:hover {
-  background: var(--black);
+  background: var(--white);
+  border-color: var(--black);
+  color: var(--black);
   transform: translateY(-3px);
 }
 
@@ -1520,6 +1523,22 @@ img {
   gap: 8px;
 }
 
+/* Pedir and Agregar share the exact same height inside a .btn-group. */
+.btn-group .btn-pedir,
+.btn-group .btn-cart {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.detalle-precio-row .btn-group .btn-pedir,
+.detalle-precio-row .btn-group .btn-cart {
+  height: 46px;
+}
+
 .btn-cart {
   padding: 5px 14px;
   font-size: 0.95rem;
@@ -1560,8 +1579,9 @@ body.cart-lock {
   .cart-fab {
     bottom: 64px;
     right: 16px;
-    width: 52px;
-    height: 52px;
+    width: 40px;
+    height: 40px;
+    font-size: 1rem;
   }
 
   .cart-drawer {

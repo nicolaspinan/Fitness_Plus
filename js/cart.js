@@ -394,14 +394,14 @@
       ui.emptyEl.classList.add('show');
     }
 
-    // Tab order: close → item controls → Vaciar → Enviar (anchor only).
+    // Tab order: close → item controls → Vaciar → Pedir (anchor only).
     var tail = [];
     if (ui.vaciar) tail.push(ui.vaciar);
     if (ui.enviar && ui.enviar.tagName === 'A') tail.push(ui.enviar);
     ui.focusables = focusables.concat(ui.controls, tail);
   }
 
-  /** Footer: Vaciar (always) + Enviar anchor (items) or disabled span (empty,
+  /** Footer: Vaciar (always) + Pedir anchor (items) or disabled span (empty,
    *  mirrors the .btn-pedir.disabled pattern from catalog.js). */
   function renderFooter() {
     if (!ui.vaciar) {
@@ -413,14 +413,14 @@
     }
     var enviar;
     if (items.length) {
-      enviar = el('a', 'btn-pedir cart-send', 'Enviar');
+      enviar = el('a', 'btn-pedir cart-send', 'Pedir');
       enviar.id = 'cartEnviar';
       enviar.setAttribute('target', '_blank');
       enviar.setAttribute('rel', 'noopener noreferrer');
       enviar.setAttribute('href', waUrl());
       enviar.addEventListener('click', onEnviarClick);
     } else {
-      enviar = el('span', 'btn-pedir disabled', 'Enviar');
+      enviar = el('span', 'btn-pedir disabled', 'Pedir');
       enviar.id = 'cartEnviar';
       enviar.setAttribute('aria-disabled', 'true');
       enviar.setAttribute('tabindex', '-1');
