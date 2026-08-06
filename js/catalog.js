@@ -95,10 +95,21 @@
     return Number(n).toLocaleString('es-AR');
   }
 
-  /** WhatsApp deep link with the effective price (offer ?? base). */
+  /** Grammatical article per product name so the WhatsApp message reads
+   *  "un" (masculine) or "una" (feminine) correctly — e.g. "una creatina",
+   *  "un pre-workout". Products not listed fall back to no article. */
+  var PRODUCT_ARTICLES = {
+    'CREATINA MYPROTEIN': 'una',
+    'CREATINA STAR NUTRITION': 'una',
+    'CREATINA ENA': 'una',
+    'PRE-WORKOUT PREWAR': 'un',
+    'PRE-WORKOUT PUMP V8': 'un'
+  };
+
+  /** WhatsApp deep link with the product name and its grammatical article. */
   function waLink(product) {
-    var precio = (product.offer_price != null) ? product.offer_price : product.price;
-    var msg = 'Hola, quiero comprar ' + product.name + ' ($' + formatPrice(precio) + ')';
+    var article = PRODUCT_ARTICLES[product.name] || '';
+    var msg = 'Hola, quiero comprar ' + (article ? article + ' ' : '') + product.name;
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg);
   }
 
