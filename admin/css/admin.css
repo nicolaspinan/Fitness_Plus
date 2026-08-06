@@ -631,6 +631,51 @@
   font-size: 0.84rem;
 }
 
+/* ---- drag & drop reorder ------------------------------------------------------------ */
+
+.admin-row[draggable="true"] {
+  cursor: grab;
+  /* Anchor the drop-indicator pseudo-elements (they must not shift layout). */
+  position: relative;
+}
+
+.admin-row[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* The row being dragged: faded + dashed cobalt outline (border style/color
+   changes only — same thickness, so nothing around it moves). */
+.admin-row.dragging {
+  opacity: 0.45;
+  border-style: dashed;
+  border-color: #005fcc;
+}
+
+/* The row the pointer is over as a drop target: subtle cobalt tint. */
+.admin-row.drop-before,
+.admin-row.drop-after {
+  background: #0d1a2c;
+  border-color: #005fcc;
+}
+
+/* Non-layout-shifting drop indicator: an absolutely positioned accent line in
+   the gap above/below the row, clear of the row's own 1px border. */
+.admin-row.drop-before::before,
+.admin-row.drop-after::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  height: 3px;
+  border-radius: 2px;
+  background: #005fcc;
+  box-shadow: 0 0 10px rgba(0, 95, 204, 0.7);
+  pointer-events: none;
+}
+
+.admin-row.drop-before::before { top: -4px; }
+.admin-row.drop-after::after { bottom: -4px; }
+
 /* ---- tabs -------------------------------------------------------------------------------------- */
 
 .admin-tabs {

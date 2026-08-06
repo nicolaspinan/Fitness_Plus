@@ -18,6 +18,11 @@
  *   - Uploads: type (png/jpeg/webp) + size (<=2MB) validated client-side;
  *     preview via FileReader.readAsDataURL — NEVER URL.createObjectURL.
  *
+ * Row reordering: native HTML5 drag & drop (dragstart/dragover/drop/dragend,
+ * all bound with addEventListener) on top of the existing arrow buttons, which
+ * stay as the touch/mobile/accessibility fallback. Drops persist optimistically
+ * (reorder state + re-render, then update the DB; reload on failure).
+ *
  * No test runner — verified with `node --check js/admin.js` plus the manual
  * browser checklist from sdd-verify.
  */
@@ -47,6 +52,11 @@
   var editingProductId = null;
   var bannerTimer = null;
   var modalResolver = null;
+  // Id of the row currently being dragged (null when no drag is active).
+  var draggedRowId = null;
+  // Whether the mousedown that could start a drag landed on an action button
+  // (arrows/edit/delete). Row drags must never hijack the icon buttons.
+  var dragPressOnButton = false;
 
   // ---- small helpers ----------------------------------------------------------
 
@@ -408,6 +418,9 @@
     img.className = 'row-thumb';
     img.alt = alt || '';
     img.loading = 'lazy';
+    // Keep the thumbnail from becoming the native drag source: the row itself
+    // is draggable, so a drag started on the image must drag the whole row.
+    img.setAttribute('draggable', 'false');
     img.addEventListener('error', function () { img.classList.add('hidden'); });
     if (url) img.src = url;
     return img;
@@ -538,7 +551,11 @@
 
       var actions = categoryRowActions(cat);
 
-      listEl.appendChild(makeRow(null, title, meta, actions));
+      // DnD onDrop receives (draggedId, targetId, before) — exactly the
+      // reorderCategories signature, so the function is passed by reference.
+      var row = makeRow(null, title, meta, actions);
+      enableRowDrag(row, cat.id, reorderCategories);
+      listEl.appendChild(row);
     }
   }
 
@@ -856,12 +873,16 @@
 
       var group = document.createElement('div');
       group.className = 'admin-list';
+      // Drop handler receives the group's category id through a parameter (never
+      // a loop variable) so every group's rows reorder only within themselves.
+      var onProductDrop = productGroupDropHandler(cat.id);
       for (var i = 0; i < list.length; i++) {
         var p = list[i];
         var title = document.createElement('div');
         title.className = 'row-title';
         title.textContent = p.name;
         var row = makeRow(makeThumb(p.image_url, p.name), title, productMetaEl(p), productRowActions(p, productMoveActions(p, moveProduct)));
+        enableRowDrag(row, p.id, onProductDrop);
         group.appendChild(row);
       }
       wrap.appendChild(group);
@@ -903,6 +924,7 @@
       meta.appendChild(order);
 
       var row = makeRow(makeThumb(p.image_url, p.name), titleEl, meta, productRowActions(p, productMoveActions(p, moveFeatured)));
+      enableRowDrag(row, p.id, reorderFeatured);
       group.appendChild(row);
     }
     wrap.appendChild(group);
@@ -1013,6 +1035,238 @@
           showBanner('No se pudo eliminar el producto. Intentá de nuevo.', 'error');
         });
       });
+  }
+
+  // =============================================================================
+  // DRAG & DROP REORDER (categories, products per category, destacados de home)
+  // =============================================================================
+  // Native HTML5 drag & drop, layered on top of the existing arrow buttons
+  // (which stay as the touch/mobile/accessibility fallback and the precise
+  // path). Drops are optimistic: in-memory state is reordered and the list is
+  // re-rendered immediately, then only the rows whose order value changed are
+  // persisted (Promise.all, like the move functions); on failure state is
+  // reloaded so the UI snaps back to the DB's real order.
+  //
+  // All handlers receive ids/items as parameters — never a closure over a loop
+  // variable (same rule that keeps categoryRowActions and productMoveActions
+  // bug-free in ES5, which has no block scope).
+
+  /**
+   * Persist a batch of sort-order updates. The caller has ALREADY applied the
+   * new order to in-memory state and re-rendered (optimistic UI): on success we
+   * only confirm with a banner; on failure we resync state from the DB and call
+   * rerenderFn so the optimistic reorder is undone.
+   */
+  function persistReorder(updates, successMessage, rerenderFn) {
+    Promise.all(updates).then(function () {
+      showBanner(successMessage, 'success');
+    }).catch(function (err) {
+      if (isAuthError(err)) { goLogin(); return; }
+      showBanner('No se pudo cambiar el orden. Intentá de nuevo.', 'error');
+      // Some of the batched updates may have applied: reload state so the next
+      // move starts from the DB's real order, not a half-applied one.
+      loadCatalog().then(function () {
+        if (typeof rerenderFn === 'function') rerenderFn();
+      }).catch(function () { /* best-effort resync */ });
+    });
+  }
+
+  /** True when the pointer is over the upper half of the row (drop before it). */
+  function isInRowTopHalf(e, rowEl) {
+    var rect = rowEl.getBoundingClientRect();
+    if (!rect || rect.height === 0) return true;
+    var y = e.clientY;
+    if (y == null) y = 0;
+    return y < rect.top + rect.height / 2;
+  }
+
+  /** Remove the drop indicators from every row (only one drag at a time). */
+  function clearDropIndicators() {
+    var rows = document.querySelectorAll('.admin-row.drop-before, .admin-row.drop-after');
+    for (var i = 0; i < rows.length; i++) {
+      rows[i].classList.remove('drop-before', 'drop-after');
+    }
+  }
+
+  function dragFromButton(e) {
+    return !!(e.target && typeof e.target.closest === 'function' && e.target.closest('button'));
+  }
+
+  /**
+   * Make a row draggable and bind the native HTML5 DnD events. onDrop is called
+   * as onDrop(draggedId, targetId, before) — all values arrive as parameters,
+   * so no closure is ever created over a loop variable.
+   */
+  function enableRowDrag(rowEl, itemId, onDrop) {
+    rowEl.setAttribute('draggable', 'true');
+
+    rowEl.addEventListener('mousedown', function (e) {
+      dragPressOnButton = dragFromButton(e);
+    });
+
+    rowEl.addEventListener('dragstart', function (e) {
+      // Never hijack a drag started on an action button (arrows, edit, delete…).
+      // The drag source is the row itself even when the pointer went down on a
+      // button, so e.target is not enough: trust the mousedown flag too.
+      if (dragPressOnButton || dragFromButton(e)) {
+        dragPressOnButton = false;
+        e.preventDefault();
+        return;
+      }
+      draggedRowId = itemId;
+      rowEl.classList.add('dragging');
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', String(itemId)); } catch (err) { /* older browsers */ }
+      }
+    });
+
+    rowEl.addEventListener('dragover', function (e) {
+      if (draggedRowId === null) return;
+      if (draggedRowId === itemId) {
+        rowEl.classList.remove('drop-before', 'drop-after');
+        return;
+      }
+      // preventDefault is required to allow the drop.
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+      var before = isInRowTopHalf(e, rowEl);
+      rowEl.classList.toggle('drop-before', before);
+      rowEl.classList.toggle('drop-after', !before);
+    });
+
+    rowEl.addEventListener('dragleave', function (e) {
+      // Ignore boundary crossings between the row's own children.
+      var to = e.relatedTarget;
+      if (to && rowEl.contains(to)) return;
+      rowEl.classList.remove('drop-before', 'drop-after');
+    });
+
+    rowEl.addEventListener('drop', function (e) {
+      e.preventDefault();
+      if (draggedRowId === null || draggedRowId === itemId) return;
+      clearDropIndicators();
+      var before = isInRowTopHalf(e, rowEl);
+      onDrop(draggedRowId, itemId, before);
+    });
+
+    rowEl.addEventListener('dragend', function () {
+      draggedRowId = null;
+      dragPressOnButton = false;
+      rowEl.classList.remove('dragging');
+      clearDropIndicators();
+    });
+  }
+
+  /**
+   * New order for a group of items: move the item at index `from` to the
+   * position of the item at index `to` (before it, or after it when
+   * before=false). Returns a reordered copy of the sorted array. The removal
+   * shifts the target index left when the dragged item sat before it — that
+   * off-by-one is the classic bug this handles.
+   */
+  function moveInSortedList(sorted, from, to, before) {
+    var reordered = sorted.slice();
+    var item = reordered.splice(from, 1)[0];
+    var insertAt = to;
+    if (from < to) insertAt = to - 1;
+    if (!before) insertAt += 1;
+    reordered.splice(insertAt, 0, item);
+    return reordered;
+  }
+
+  /** Reorder all categories by drag & drop: sort_order rewritten 0..N-1. */
+  function reorderCategories(draggedId, targetId, before) {
+    if (draggedId === targetId) return;
+    var sorted = state.categories.slice().sort(function (a, b) {
+      return (a.sort_order || 0) - (b.sort_order || 0);
+    });
+    var from = -1;
+    var to = -1;
+    for (var i = 0; i < sorted.length; i++) {
+      if (sorted[i].id === draggedId) from = i;
+      if (sorted[i].id === targetId) to = i;
+    }
+    if (from < 0 || to < 0) return;
+
+    var reordered = moveInSortedList(sorted, from, to, before);
+    var changed = [];
+    for (var i = 0; i < reordered.length; i++) {
+      var cat = reordered[i];
+      if (cat.sort_order !== i) changed.push(window.Supabase.update('categories', cat.id, { sort_order: i }));
+      cat.sort_order = i;
+    }
+    if (!changed.length) return; // pure no-op
+    state.categories = reordered;
+    renderCategoryRows();
+    persistReorder(changed, 'Orden actualizado.', renderCategoryRows);
+  }
+
+  /**
+   * Reorder the products of ONE category group by drag & drop: sort_order
+   * rewritten 0..N-1 within the group. Cross-category drops are a no-op.
+   */
+  function reorderProductsInCategory(catId, draggedId, targetId, before) {
+    if (draggedId === targetId) return;
+    var list = productsOfCategory(catId);
+    var from = -1;
+    var to = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === draggedId) from = i;
+      if (list[i].id === targetId) to = i;
+    }
+    // The dragged row does not belong to this group (cross-group drop): no-op.
+    if (from < 0 || to < 0) return;
+
+    var reordered = moveInSortedList(list, from, to, before);
+    var changed = [];
+    for (var i = 0; i < reordered.length; i++) {
+      var p = reordered[i];
+      if (p.sort_order !== i) changed.push(window.Supabase.update('products', p.id, { sort_order: i }));
+      p.sort_order = i;
+    }
+    if (!changed.length) return; // pure no-op
+    renderProductsByCategory();
+    persistReorder(changed, 'Orden actualizado.', renderProductsByCategory);
+  }
+
+  /**
+   * Reorder the featured (home) products by drag & drop: home_order rewritten
+   * 1..N. Non-featured products keep home_order null and are never touched.
+   */
+  function reorderFeatured(draggedId, targetId, before) {
+    if (draggedId === targetId) return;
+    var list = featuredList();
+    var from = -1;
+    var to = -1;
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].id === draggedId) from = i;
+      if (list[i].id === targetId) to = i;
+    }
+    if (from < 0 || to < 0) return;
+
+    var reordered = moveInSortedList(list, from, to, before);
+    var changed = [];
+    for (var i = 0; i < reordered.length; i++) {
+      var p = reordered[i];
+      var newOrder = i + 1;
+      if (p.home_order !== newOrder) changed.push(window.Supabase.update('products', p.id, { home_order: newOrder }));
+      p.home_order = newOrder;
+    }
+    if (!changed.length) return; // pure no-op
+    renderFeaturedProducts();
+    persistReorder(changed, 'Orden de destacados actualizado.', renderFeaturedProducts);
+  }
+
+  /**
+   * Build the drop handler for the product rows of ONE category group. Receives
+   * the category id as a parameter (never a loop variable) so each group's rows
+   * reorder within their own group only.
+   */
+  function productGroupDropHandler(catId) {
+    return function (draggedId, targetId, before) {
+      reorderProductsInCategory(catId, draggedId, targetId, before);
+    };
   }
 
   // ---- product form ------------------------------------------------------------
