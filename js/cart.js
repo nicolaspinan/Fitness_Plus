@@ -328,10 +328,10 @@
     };
 
     fab.addEventListener('click', openDrawer);
-    // Hide the FAB over the hero; reveal it once the user scrolls past one
-    // viewport height (the .hero is min-height: 100svh).
+    // Hide the FAB over the hero; reveal it at the same scroll point the
+    // navbar turns black (main.js toggles .scrolled at window.scrollY > 60).
     function onFabScroll() {
-      fab.classList.toggle('visible', window.scrollY >= window.innerHeight);
+      fab.classList.toggle('visible', window.scrollY > 60);
     }
     window.addEventListener('scroll', onFabScroll, { passive: true });
     onFabScroll();
