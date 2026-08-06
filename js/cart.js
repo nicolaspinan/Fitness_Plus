@@ -14,8 +14,9 @@
  * reconciliation hint on each line (superset of the spec's minimal shape):
  * set to true at add time, refreshed by reconcile() from the live catalog.
  *
- * Slice B (pending) builds the FAB/badge/drawer/scrim/toast UI, cross-tab
- * storage sync and responsive CSS on top of this core.
+ * Slice B builds the FAB/badge/drawer/scrim/toast UI (injected via
+ * createElement — CSP script-src 'self' forbids inline handlers), the
+ * cross-tab storage sync and the responsive styles on top of this core.
  *
  * Vanilla JS (ES5), zero dependencies, no build step. No test runner —
  * verified with node --check plus the manual browser checklist from sdd-verify.
@@ -120,6 +121,10 @@
       });
     }
     save();
+    if (ui) {
+      refreshAll();
+      showToast('Agregado ✓');
+    }
   }
 
   /** Remove a product line entirely (used by the drawer − control at qty 1). */
@@ -130,6 +135,7 @@
       if (items[i].id === id) {
         items.splice(i, 1);
         save();
+        if (ui) refreshAll();
         return;
       }
     }
@@ -154,6 +160,7 @@
     }
     item.qty = n;
     save();
+    if (ui) refreshAll();
   }
 
   /** Snapshot of the current lines (safe for callers to read). */
@@ -173,6 +180,7 @@
     if (!items.length) return;
     items = [];
     save();
+    if (ui) refreshAll();
   }
 
   /** Consolidated WhatsApp message (SC-03): header line plus one '• Nx NAME'
@@ -221,6 +229,317 @@
       }
     }
     if (changed) save();
+    // FIX-2: stock may have changed since the last save — refresh the UI now
+    // so the drawer and send path never use a stale in_stock flag.
+    if (ui) refreshAll();
+  }
+
+  // ---- Slice B: FAB / drawer / scrim / toast UI -------------------------------
+
+  // UI shell state. Stays null until injectUI() runs (and while the script
+  // executes outside a browser, e.g. node --check or the behavior harness).
+  var ui = null;
+  var toastTimer = null;
+
+  var DOM_AVAILABLE = typeof document !== 'undefined' &&
+    document.body && typeof document.createElement === 'function';
+
+  /** WhatsApp deep link for the consolidated cart message. */
+  function waUrl() {
+    return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(buildMessage());
+  }
+
+  /** createElement shortcut. */
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  /** Build the UI shell — FAB + badge, scrim, drawer, toast — via
+   *  createElement + addEventListener only (CSP forbids inline handlers). */
+  function injectUI() {
+    if (ui) return;
+
+    var fab = el('button', 'cart-fab');
+    fab.type = 'button';
+    fab.id = 'cartFab';
+    fab.setAttribute('aria-haspopup', 'dialog');
+    fab.setAttribute('aria-controls', 'cartDrawer');
+    fab.setAttribute('aria-expanded', 'false');
+    fab.setAttribute('aria-label', 'Abrir carrito');
+    var icon = el('i', 'fas fa-shopping-cart');
+    icon.setAttribute('aria-hidden', 'true');
+    var badge = el('span', 'cart-badge');
+    badge.id = 'cartBadge';
+    badge.setAttribute('aria-hidden', 'true');
+    fab.appendChild(icon);
+    fab.appendChild(badge);
+
+    var scrim = el('div', 'cart-scrim');
+    scrim.id = 'cartScrim';
+    scrim.setAttribute('aria-hidden', 'true');
+
+    var drawer = el('aside', 'cart-drawer');
+    drawer.id = 'cartDrawer';
+    drawer.setAttribute('role', 'dialog');
+    drawer.setAttribute('aria-modal', 'true');
+    drawer.setAttribute('aria-labelledby', 'cartDrawerTitle');
+    drawer.setAttribute('aria-hidden', 'true');
+
+    var header = el('div', 'cart-drawer-header');
+    var title = el('h2', null, 'Carrito');
+    title.id = 'cartDrawerTitle';
+    var closeBtn = el('button', 'cart-close', '\u00d7');
+    closeBtn.type = 'button';
+    closeBtn.id = 'cartClose';
+    closeBtn.setAttribute('aria-label', 'Cerrar carrito');
+    header.appendChild(title);
+    header.appendChild(closeBtn);
+
+    var itemsEl = el('div', 'cart-items');
+    itemsEl.id = 'cartItems';
+    var emptyEl = el('div', 'cart-empty', 'Tu carrito está vacío');
+    emptyEl.id = 'cartEmpty';
+    var footerEl = el('div', 'cart-footer');
+    footerEl.id = 'cartFooter';
+    drawer.appendChild(header);
+    drawer.appendChild(itemsEl);
+    drawer.appendChild(emptyEl);
+    drawer.appendChild(footerEl);
+
+    var toast = el('div', 'cart-toast');
+    toast.id = 'cartToast';
+    toast.setAttribute('role', 'status');
+    toast.setAttribute('aria-live', 'polite');
+
+    document.body.appendChild(scrim);
+    document.body.appendChild(drawer);
+    document.body.appendChild(toast);
+    document.body.appendChild(fab);
+
+    ui = {
+      fab: fab, badge: badge, scrim: scrim, drawer: drawer,
+      itemsEl: itemsEl, emptyEl: emptyEl, footerEl: footerEl,
+      closeBtn: closeBtn, toast: toast,
+      vaciar: null, enviar: null,
+      controls: [], focusables: [], open: false
+    };
+
+    fab.addEventListener('click', openDrawer);
+    closeBtn.addEventListener('click', closeDrawer);
+    scrim.addEventListener('click', closeDrawer);
+    drawer.addEventListener('click', onDrawerClick);
+    document.addEventListener('keydown', onDocumentKeydown);
+
+    refreshAll();
+  }
+
+  /** Badge count + drawer re-render (drawer only while open — its content is
+   *  rebuilt on every open anyway). */
+  function refreshAll() {
+    if (!ui) return;
+    var count = getCount();
+    ui.badge.classList.toggle('off', count === 0);
+    ui.badge.textContent = count > 99 ? '99+' : String(count);
+    if (ui.open) renderDrawerContent();
+  }
+
+  function renderDrawerContent() {
+    renderFooter();
+    renderItems();
+  }
+
+  /** One line per item. In-stock lines get − qty + controls; lines flagged
+   *  "sin stock" by reconcile() are non-interactive (no controls). */
+  function renderItems() {
+    var wrap = ui.itemsEl;
+    while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    ui.controls = [];
+    var focusables = [ui.closeBtn];
+
+    if (items.length) {
+      ui.emptyEl.classList.remove('show');
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var row = el('div', 'cart-item');
+        row.setAttribute('data-id', it.id);
+        var info = el('div', 'cart-item-info');
+        info.appendChild(el('span', 'cart-item-name', it.name || it.id));
+        if (!it.in_stock) {
+          info.appendChild(el('em', 'cart-item-oos', 'Sin stock'));
+        }
+        row.appendChild(info);
+        if (it.in_stock) {
+          var ctl = el('div', 'cart-item-controls');
+          var minus = el('button', 'cart-qty-minus', '\u2212');
+          minus.type = 'button';
+          minus.setAttribute('data-id', it.id);
+          minus.setAttribute('aria-label', 'Quitar una unidad de ' + (it.name || it.id));
+          var qty = el('span', 'cart-qty', String(it.qty));
+          var plus = el('button', 'cart-qty-plus', '+');
+          plus.type = 'button';
+          plus.setAttribute('data-id', it.id);
+          plus.setAttribute('aria-label', 'Agregar una unidad de ' + (it.name || it.id));
+          ctl.appendChild(minus);
+          ctl.appendChild(qty);
+          ctl.appendChild(plus);
+          row.appendChild(ctl);
+          ui.controls.push(minus, plus);
+        }
+        wrap.appendChild(row);
+      }
+    } else {
+      ui.emptyEl.classList.add('show');
+    }
+
+    // Tab order: close → item controls → Vaciar → Enviar (anchor only).
+    var tail = [];
+    if (ui.vaciar) tail.push(ui.vaciar);
+    if (ui.enviar && ui.enviar.tagName === 'A') tail.push(ui.enviar);
+    ui.focusables = focusables.concat(ui.controls, tail);
+  }
+
+  /** Footer: Vaciar (always) + Enviar anchor (items) or disabled span (empty,
+   *  mirrors the .btn-pedir.disabled pattern from catalog.js). */
+  function renderFooter() {
+    if (!ui.vaciar) {
+      var vaciar = el('button', 'btn-pedir', 'Vaciar');
+      vaciar.type = 'button';
+      vaciar.id = 'cartVaciar';
+      ui.footerEl.appendChild(vaciar);
+      ui.vaciar = vaciar;
+    }
+    var enviar;
+    if (items.length) {
+      enviar = el('a', 'btn-pedir cart-send', 'Enviar');
+      enviar.id = 'cartEnviar';
+      enviar.setAttribute('target', '_blank');
+      enviar.setAttribute('rel', 'noopener noreferrer');
+      enviar.setAttribute('href', waUrl());
+      enviar.addEventListener('click', onEnviarClick);
+    } else {
+      enviar = el('span', 'btn-pedir disabled', 'Enviar');
+      enviar.id = 'cartEnviar';
+      enviar.setAttribute('aria-disabled', 'true');
+      enviar.setAttribute('tabindex', '-1');
+    }
+    if (ui.enviar && ui.enviar.parentNode) ui.enviar.parentNode.removeChild(ui.enviar);
+    ui.footerEl.appendChild(enviar);
+    ui.enviar = enviar;
+  }
+
+  /** Container delegation for drawer controls (survives re-renders). */
+  function onDrawerClick(e) {
+    var minus = e.target.closest ? e.target.closest('.cart-qty-minus') : null;
+    var plus = e.target.closest ? e.target.closest('.cart-qty-plus') : null;
+    if (e.target.closest && e.target.closest('#cartVaciar')) {
+      e.preventDefault();
+      clear();
+      return;
+    }
+    if (!minus && !plus) return;
+    e.preventDefault();
+    var id = (minus || plus).getAttribute('data-id');
+    var item = findItem(id);
+    if (plus) {
+      setQty(id, (item ? item.qty : 1) + 1); // capped at 99 by clampQty
+      refocusControl('cart-qty-plus', id);
+    } else {
+      setQty(id, (item ? item.qty : 1) - 1); // qty 1 → 0 → remove
+      if (findItem(id)) {
+        refocusControl('cart-qty-minus', id);
+      } else {
+        // Line removed: move focus to the first remaining control or Vaciar.
+        var next = ui.controls.length ? ui.controls[0] : ui.vaciar;
+        if (next) next.focus();
+      }
+    }
+  }
+
+  /** Keep focus on the same ± control after its re-render. */
+  function refocusControl(cls, id) {
+    for (var i = 0; i < ui.controls.length; i++) {
+      if (ui.controls[i].className === cls &&
+          ui.controls[i].getAttribute('data-id') === id) {
+        ui.controls[i].focus();
+        return;
+      }
+    }
+  }
+
+  function openDrawer() {
+    if (!ui || ui.open) return;
+    ui.open = true;
+    ui.drawer.classList.add('open');
+    ui.scrim.classList.add('open');
+    ui.fab.setAttribute('aria-expanded', 'true');
+    ui.drawer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('cart-lock');
+    renderDrawerContent();
+    if (ui.focusables.length) ui.focusables[0].focus();
+  }
+
+  function closeDrawer() {
+    if (!ui || !ui.open) return;
+    ui.open = false;
+    ui.drawer.classList.remove('open');
+    ui.scrim.classList.remove('open');
+    ui.fab.setAttribute('aria-expanded', 'false');
+    ui.drawer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('cart-lock');
+    ui.fab.focus();
+  }
+
+  /** ESC closes the drawer; Tab is trapped inside it (a11y, SC-06). */
+  function onDocumentKeydown(e) {
+    if (!ui || !ui.open) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      closeDrawer();
+      return;
+    }
+    if (e.key !== 'Tab' || !ui.focusables.length) return;
+    var active = document.activeElement;
+    var first = ui.focusables[0];
+    var last = ui.focusables[ui.focusables.length - 1];
+    if (e.shiftKey) {
+      if (active === first || !ui.drawer.contains(active)) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else if (active === last || !ui.drawer.contains(active)) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+
+  /** Toast feedback (role="status" announces adds; global reduced-motion CSS
+   *  makes the transition instant). */
+  function showToast(msg) {
+    if (!ui) return;
+    ui.toast.textContent = msg;
+    ui.toast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { ui.toast.classList.remove('show'); }, 2400);
+  }
+
+  /** Send: refresh the URL from the current (just-reconciled) state so a
+   *  stale in_stock flag is never sent (FIX-2), then clear after the anchor's
+   *  new-tab navigation has been initiated (clear-on-send). */
+  function onEnviarClick() {
+    if (ui && ui.enviar) ui.enviar.setAttribute('href', waUrl());
+    setTimeout(function () { clear(); }, 0);
+  }
+
+  /** Cross-tab sync (SC-05): another tab wrote the cart → re-read and
+   *  re-render badge/drawer so every open tab stays consistent. */
+  function syncFromStorage(e) {
+    if (!e || e.key !== STORAGE_KEY) return;
+    items = load();
+    refreshAll();
+    showToast('Carrito actualizado');
   }
 
   // ---- exports -----------------------------------------------------------------
@@ -235,4 +554,14 @@
     buildMessage: buildMessage,
     reconcile: reconcile
   };
+
+  // ---- boot -------------------------------------------------------------------
+
+  // Inject the UI shell (script runs at the end of body, so the DOM is ready).
+  if (DOM_AVAILABLE) {
+    injectUI();
+  }
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('storage', syncFromStorage);
+  }
 })();

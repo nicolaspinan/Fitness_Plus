@@ -254,8 +254,10 @@
     });
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
+        // Guard BEFORE preventDefault so a focused .btn-pedir / .btn-cart
+        // control fires its own native activation (keyboard accessibility).
         if (e.target.closest('.btn-pedir, .btn-cart')) return;
+        e.preventDefault();
         window.location.href = 'producto.html?id=' + product.id;
       }
     });
