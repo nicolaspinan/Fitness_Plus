@@ -95,20 +95,26 @@
 
   function openMobileMenu() {
     if (!navLinks || !navToggle) return;
+    // Content starts below the fixed navbar so the X button never overlaps the first link.
+    if (navbar) navLinks.style.paddingTop = (navbar.offsetHeight + 8) + 'px';
     navLinks.classList.add('open');
     navToggle.setAttribute('aria-expanded', 'true');
     navToggle.setAttribute('aria-label', 'Cerrar menú');
     const icon = navToggle.querySelector('i');
     if (icon) icon.className = 'fas fa-times';
+    document.body.classList.add('menu-lock', 'menu-open');
+    closeDropdown(false); // submenu starts collapsed on each open
   }
 
   function closeMobileMenu(returnFocus) {
     if (!navLinks || !navToggle) return;
+    navLinks.style.paddingTop = '';
     navLinks.classList.remove('open');
     navToggle.setAttribute('aria-expanded', 'false');
     navToggle.setAttribute('aria-label', 'Abrir menú');
     const icon = navToggle.querySelector('i');
     if (icon) icon.className = 'fas fa-bars';
+    document.body.classList.remove('menu-lock', 'menu-open');
     if (returnFocus) navToggle.focus();
   }
 
@@ -138,6 +144,16 @@
     });
   }
 
+  // Close the mobile drawer when tapping outside it (scrim or page).
+  // navToggle lives outside navLinks, so exclude it explicitly or the toggle
+  // would open the drawer and immediately close it again.
+  document.addEventListener('click', function (e) {
+    if (!navLinks || !navToggle) return;
+    if (!navLinks.classList.contains('open')) return;
+    if (navLinks.contains(e.target) || navToggle.contains(e.target)) return;
+    closeMobileMenu(false);
+  });
+
   document.querySelectorAll('.nav-link, .dropdown-cat-link, .dropdown-item').forEach(link => {
     link.addEventListener('click', function () {
       if (this.classList.contains('dropdown-trigger')) return;
@@ -166,7 +182,7 @@
     function updateActiveLink() {
       let current = '';
       sections.forEach(section => {
-        const top = section.offsetTop - 120;
+        const top = section.offsetTop - 120; // matches the fixed navbar height (see scroll-margin-top in styles.css)
         if (window.scrollY >= top) {
           current = section.getAttribute('id');
         }
@@ -197,6 +213,21 @@
       this.appendChild(span);
       span.addEventListener('animationend', () => span.remove());
     });
+  });
+
+  // Back button: navigate back when there is a previous entry, else fall back to index.html.
+  // Delegated at document level because catalog.js re-renders the detalle
+  // container (and its #btnVolver anchor) on every load. Select by id only:
+  // catalog.js renderNotFound also emits a .btn-volver link whose semantics are
+  // the opposite ("Volver al inicio" = always go home), and it has no id.
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest('#btnVolver');
+    if (!btn) return;
+    if (document.referrer && window.history.length > 1) {
+      e.preventDefault();
+      window.history.back();
+    }
+    // else: let the href="index.html" fallback proceed
   });
 
 })();

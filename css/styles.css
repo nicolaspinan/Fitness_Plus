@@ -137,6 +137,12 @@ img {
   padding: 0 24px;
 }
 
+/* Keep anchor targets visible below the fixed navbar. */
+section[id],
+[id="main"] {
+  scroll-margin-top: 140px;
+}
+
 /* ===== NAVBAR ===== */
 
 .navbar {
@@ -1580,6 +1586,20 @@ body.cart-lock {
   overflow: hidden;
 }
 
+/* Locks background scroll while the mobile nav drawer is open. */
+body.menu-lock {
+  overflow: hidden;
+}
+
+/* Dimmed scrim behind the open mobile nav drawer (drawer z-index: 999, toggle 1000). */
+body.menu-open::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 998;
+}
+
 @media (max-width: 992px) {
   .cart-drawer {
     max-width: 92vw;
@@ -1711,10 +1731,15 @@ body.cart-lock {
 
 @media (max-width: 768px) {
   .nav-links {
+    /* Submenu link indent — used by padding-left, ::after left and hover
+       width, which must stay in sync (was a hardcoded 107px in all three
+       before the fix). Inherited by the drawer children. */
+    --drawer-link-indent: 16px;
     position: fixed;
     top: 0;
     right: -100%;
     width: 280px;
+    height: 100vh;
     height: 100svh;
     background: var(--black);
     flex-direction: column;
@@ -1786,7 +1811,7 @@ body.cart-lock {
   .nav-links .dropdown-cat-link {
     position: relative;
     width: 100%;
-    padding: 10px 0 10px 107px;
+    padding: 10px 0 10px var(--drawer-link-indent);
     display: block;
     text-align: left;
     line-height: inherit;
@@ -1796,14 +1821,13 @@ body.cart-lock {
     color: rgba(255, 255, 255, 0.8);
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    white-space: nowrap;
   }
 
   .nav-links .dropdown-cat-link::after {
     content: '';
     position: absolute;
     bottom: 6px;
-    left: 107px;
+    left: var(--drawer-link-indent);
     width: 0;
     height: 2px;
     background: var(--white);
@@ -1811,12 +1835,12 @@ body.cart-lock {
   }
 
   .nav-links .dropdown-cat-link:hover::after {
-    width: calc(100% - 107px);
+    width: calc(100% - var(--drawer-link-indent));
   }
 
   .nav-links .dropdown-cat-link:hover {
     color: var(--white);
-    background: transparent;
+    background: rgba(255, 255, 255, 0.06);
   }
 
   .nav-toggle {

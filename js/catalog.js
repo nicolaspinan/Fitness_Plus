@@ -539,7 +539,7 @@
       actionRow +
       '</div>' +
       '<div class="detalle-actions">' +
-      '<a href="javascript:history.back()" class="btn-volver"><i class="fas fa-arrow-left" aria-hidden="true"></i> Volver</a>' +
+      '<a href="index.html" id="btnVolver" class="btn-volver"><i class="fas fa-arrow-left" aria-hidden="true"></i> Volver</a>' +
       '</div>' +
       '</div>' +
       '</div>';
