@@ -34,7 +34,8 @@ create table categories (
   hero_subtitle text not null,
   section_title text not null,
   section_subtitle text not null,
-  sort_order int not null default 0
+  sort_order int not null default 0,
+  hero_image_url text
 );
 
 create table products (

@@ -403,11 +403,16 @@
 
   // ---- categoria.html ---------------------------------------------------------------
 
-  function setCategoriaHero(slug) {
+  function setCategoriaHero(slug, imageUrl) {
     var hero = document.getElementById('hero-categoria');
     if (!hero) return;
-    var img = HERO_IMAGES[slug] || 'img/hero/principal_hero.png';
-    hero.style.backgroundImage = 'linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 100%), url(\'' + img + '\')';
+    var fallback = HERO_IMAGES[slug] || 'img/hero/principal_hero.png';
+    var img = imageUrl || fallback;
+    // Escape both quote classes before embedding the URL into a CSS url("...")
+    // string. Halts any breakout from the url() token without touching HTML.
+    var esc = String(img).replace(/"/g, '%22').replace(/'/g, '%27');
+    hero.style.setProperty('background-image',
+      'linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 100%), url("' + esc + '")');
     hero.style.backgroundSize = 'cover';
     hero.style.backgroundPosition = 'center 80%';
   }
@@ -439,7 +444,7 @@
     setText('categoria-hero-subtitle', category.hero_subtitle);
     setText('categoria-section-title', category.section_title);
     setText('categoria-section-subtitle', category.section_subtitle);
-    setCategoriaHero(slug);
+    setCategoriaHero(slug, category && category.hero_image_url ? category.hero_image_url : null);
 
     var pageUrl = SITE_URL + '/categoria.html?categoria=' + encodeURIComponent(slug);
     document.title = category.name + ' | Fitness Plus';

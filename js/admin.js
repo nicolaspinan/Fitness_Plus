@@ -591,6 +591,10 @@
     $('cat-section-title').value = cat ? cat.section_title : '';
     $('cat-section-subtitle').value = cat ? cat.section_subtitle : '';
 
+    var heroUrl = cat && cat.hero_image_url ? cat.hero_image_url : '';
+    $('cat-hero-url').value = heroUrl;
+    setPreview($('cat-hero-preview'), heroUrl);
+
     $('categoriasList').classList.add('hidden');
     setStatus($('categoriasStatus'), 'hidden');
     $('categoriaForm').classList.remove('hidden');
@@ -601,6 +605,9 @@
   function closeCategoryForm() {
     $('categoriaForm').classList.add('hidden');
     editingCategoryId = null;
+    $('cat-hero-file').value = '';
+    $('cat-hero-url').value = '';
+    setPreview($('cat-hero-preview'), '');
   }
 
   function handleCategorySubmit(e) {
@@ -621,6 +628,11 @@
     if (!heroTitle || !heroSubtitle) return showFormError(errEl, 'Completá el título y subtítulo del hero.');
     if (!sectionTitle || !sectionSubtitle) return showFormError(errEl, 'Completá el título y subtítulo de la sección.');
 
+    var heroImageUrl = $('cat-hero-url').value.trim();
+    if (heroImageUrl && !/^https?:\/\//i.test(heroImageUrl)) {
+      return showFormError(errEl, 'La URL del hero debe ser válida (http/https).');
+    }
+
     setBusy($('btnSaveCategoria'), true, 'Guardando…');
     var payload = {
       name: name,
@@ -628,7 +640,8 @@
       hero_title: heroTitle,
       hero_subtitle: heroSubtitle,
       section_title: sectionTitle,
-      section_subtitle: sectionSubtitle
+      section_subtitle: sectionSubtitle,
+      hero_image_url: heroImageUrl || null
     };
 
     var request;
@@ -1160,7 +1173,8 @@
    * Preview via FileReader.readAsDataURL (data: URL — allowed by img-src data:).
    * URL.createObjectURL is NEVER used for image previews.
    */
-  function bindUpload(fileInputId, urlInputId, previewId) {
+  function bindUpload(fileInputId, urlInputId, previewId, busyButtonId) {
+    busyButtonId = busyButtonId || 'btnSaveProducto';
     var fileInput = $(fileInputId);
     var urlInput = $(urlInputId);
     var preview = $(previewId);
@@ -1185,7 +1199,7 @@
 
       var path = 'admin/' + Date.now() + '-' + safeFileName(file.name);
       fileInput.setAttribute('disabled', 'disabled');
-      setBusy($('btnSaveProducto'), true, 'Subiendo imagen…');
+      setBusy($(busyButtonId), true, 'Subiendo imagen…');
       window.Supabase.upload(BUCKET, path, file, { timeout: 30000 }).then(function () {
         var previousUrl = urlInput.value.trim();
         urlInput.value = window.Supabase.publicUrl(BUCKET, path);
@@ -1200,7 +1214,7 @@
       }).then(function () {
         fileInput.removeAttribute('disabled');
         fileInput.value = '';
-        setBusy($('btnSaveProducto'), false, 'Guardar producto');
+        setBusy($(busyButtonId), false, 'Guardar ' + (busyButtonId === 'btnSaveCategoria' ? 'categoría' : 'producto'));
       });
     });
 
@@ -1355,6 +1369,7 @@
     bindProductTabs();
     bindUpload('prod-image-file', 'prod-image-url', 'prod-image-preview');
     bindUpload('prod-nutrition-file', 'prod-nutrition-url', 'prod-nutrition-preview');
+    bindUpload('cat-hero-file', 'cat-hero-url', 'cat-hero-preview', 'btnSaveCategoria');
     bindModal();
     bindMobileNav();
 

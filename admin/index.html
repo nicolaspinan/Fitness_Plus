@@ -100,6 +100,18 @@
               <input type="text" id="cat-section-subtitle" autocomplete="off">
             </div>
           </div>
+
+          <div class="form-field form-field-full">
+            <h3 class="panel-title">Imagen del hero</h3>
+            <div class="upload-row">
+              <input type="file" id="cat-hero-file" class="file-input" accept="image/png,image/jpeg,image/webp">
+              <label for="cat-hero-file" class="btn-ghost file-label"><i class="fas fa-upload" aria-hidden="true"></i> Elegir archivo</label>
+              <small class="field-hint">PNG, JPG o WEBP · hasta 2MB. Tamaño ideal 1920×500 o similar, paisaje.</small>
+              <input type="url" id="cat-hero-url" class="upload-url" placeholder="URL del hero (se completa al subir)" autocomplete="off" readonly>
+              <img id="cat-hero-preview" class="upload-preview hidden" alt="Vista previa del hero">
+            </div>
+          </div>
+
           <p id="categoriaError" class="form-error hidden"></p>
           <div class="form-actions">
             <button type="submit" class="btn-admin" id="btnSaveCategoria">Guardar categoría</button>
