@@ -696,6 +696,11 @@ section[id],
   font-size: 1.1rem;
 }
 
+.detalle-info .variant-chip {
+  padding: 7px 14px;
+  font-size: 0.8rem;
+}
+
 .btn-volver {
   display: inline-flex;
   align-items: center;
@@ -887,6 +892,49 @@ section[id],
 .badge-agotado {
   background: var(--mid-gray);
   color: var(--white);
+}
+
+/* ===== VARIANT SELECTOR (sabores) ===== */
+
+.variant-selector {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.variant-chip {
+  padding: 3px 10px;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--black);
+  background: var(--white);
+  border: 1.5px solid var(--mid-gray);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.variant-chip:hover {
+  border-color: var(--black);
+}
+
+.variant-chip.selected {
+  background: #005fcc;
+  border-color: #005fcc;
+  color: var(--white);
+}
+
+.variant-chip.disabled {
+  color: var(--light-gray);
+  border-color: var(--border-gray);
+  background: var(--off-white);
+  text-decoration: line-through;
+  cursor: not-allowed;
 }
 
 /* ===== PRECIO CON OFERTA ===== */
