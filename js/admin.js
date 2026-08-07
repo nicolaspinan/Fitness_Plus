@@ -37,6 +37,9 @@
   var IMAGE_EXTS = /\.(png|jpe?g|webp)$/i;
   var SLUG_RE = /^[a-z0-9][a-z0-9-]*$/i;
   var VALID_VIEWS = ['login', 'categorias', 'productos', 'textos'];
+  var MAX_VARIANTS = 10;
+  var MAX_VARIANT_NAME_LENGTH = 40;
+  var MAX_VARIANT_STOCK = 9999;
 
   var state = {
     categories: [],
@@ -1300,7 +1303,9 @@
     $('prod-offer').value = p && p.offer_price != null ? p.offer_price : '';
     $('prod-short').value = p ? p.short_desc : '';
     $('prod-full').value = p ? p.full_desc : '';
+    $('prod-stock').disabled = false;
     $('prod-stock').checked = p ? !!p.in_stock : true;
+    $('prod-stock-hint').classList.add('hidden');
     $('prod-featured').checked = p ? !!p.is_featured : false;
 
     var imageUrl = p ? p.image_url : '';
@@ -1309,6 +1314,9 @@
     $('prod-nutrition-url').value = nutritionUrl;
     setPreview($('prod-image-preview'), imageUrl);
     setPreview($('prod-nutrition-preview'), nutritionUrl);
+
+    renderVariantRows(p ? p.variants : null);
+    syncStockLock();
 
     $('productosStatus') && setStatus($('productosStatus'), 'hidden');
     $('productosByCategory').classList.add('hidden');
@@ -1319,8 +1327,142 @@
   }
 
   function closeProductForm() {
+    clearVariantRows();
     $('productoForm').classList.add('hidden');
     editingProductId = null;
+  }
+
+  // ---- variant rows (flavor-variants) -------------------------------------------
+
+  /**
+   * Event-driven stock lock: after every row mutation the stock checkbox is
+   * locked (disabled) while any variant row exists, with its checked state
+   * showing the derived value (any variant with stock > 0). Removing all rows
+   * re-enables the checkbox in the same form session so "remove all → save"
+   * never silently persists a false in_stock.
+   */
+  function syncStockLock() {
+    var checkbox = $('prod-stock');
+    var hint = $('prod-stock-hint');
+    var rowEls = $('variantesContainer').querySelectorAll('.variant-row');
+
+    if (rowEls.length > 0) {
+      var anyStock = false;
+      for (var i = 0; i < rowEls.length; i++) {
+        var stockInput = rowEls[i].querySelector('.variant-stock');
+        var raw = stockInput ? stockInput.value.trim() : '';
+        if (raw !== '' && Number(raw) > 0) { anyStock = true; break; }
+      }
+      checkbox.disabled = true;
+      checkbox.checked = anyStock;
+      if (hint) hint.classList.remove('hidden');
+    } else {
+      checkbox.disabled = false;
+      if (hint) hint.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Append one variant row (name + stock + remove). Reuses the form-field /
+   * btn-ghost patterns; inputs are populated via .value only (never innerHTML),
+   * so a stored variant name cannot inject markup. The add button is disabled
+   * at MAX_VARIANTS rows. Runs syncStockLock after every mutation.
+   */
+  function addVariantRow(name, stock) {
+    var container = $('variantesContainer');
+
+    var row = document.createElement('div');
+    row.className = 'variant-row';
+
+    var nameField = document.createElement('div');
+    nameField.className = 'form-field';
+    var nameLabel = document.createElement('label');
+    nameLabel.textContent = 'Sabor';
+    var nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.className = 'variant-name';
+    nameInput.maxLength = String(MAX_VARIANT_NAME_LENGTH);
+    nameInput.setAttribute('autocomplete', 'off');
+    nameInput.placeholder = 'Ej: Naranja';
+    nameInput.value = name == null ? '' : String(name);
+    nameField.appendChild(nameLabel);
+    nameField.appendChild(nameInput);
+
+    var stockField = document.createElement('div');
+    stockField.className = 'form-field';
+    var stockLabel = document.createElement('label');
+    stockLabel.textContent = 'Stock';
+    var stockInput = document.createElement('input');
+    stockInput.type = 'number';
+    stockInput.className = 'variant-stock';
+    stockInput.min = '0';
+    stockInput.max = String(MAX_VARIANT_STOCK);
+    stockInput.step = '1';
+    stockInput.setAttribute('inputmode', 'numeric');
+    stockInput.placeholder = '0';
+    stockInput.value = (stock === null || stock === undefined || stock === '') ? '' : String(stock);
+    stockField.appendChild(stockLabel);
+    stockField.appendChild(stockInput);
+
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn-ghost btn-small variant-remove';
+    removeBtn.setAttribute('aria-label', 'Quitar variante');
+    var icon = document.createElement('i');
+    icon.className = 'fas fa-times';
+    icon.setAttribute('aria-hidden', 'true');
+    removeBtn.appendChild(icon);
+
+    row.appendChild(nameField);
+    row.appendChild(stockField);
+    row.appendChild(removeBtn);
+    container.appendChild(row);
+
+    $('variantesEmpty').classList.add('hidden');
+    if (container.children.length >= MAX_VARIANTS) {
+      $('btnAddVariante').setAttribute('disabled', 'disabled');
+    }
+    syncStockLock();
+  }
+
+  /** Empty the container, restore the empty-state hint and the add button. */
+  function clearVariantRows() {
+    $('variantesContainer').innerHTML = '';
+    $('variantesEmpty').classList.remove('hidden');
+    $('btnAddVariante').removeAttribute('disabled');
+    syncStockLock();
+  }
+
+  /** Populate the rows from a product's saved variants (null/[] → no rows). */
+  function renderVariantRows(variants) {
+    clearVariantRows();
+    if (Array.isArray(variants)) {
+      for (var i = 0; i < variants.length; i++) {
+        var v = variants[i] || {};
+        addVariantRow(v.name, v.stock);
+      }
+    }
+  }
+
+  /** Row removal (delegated on the container — CSP-safe, no inline handlers). */
+  function handleVariantesClick(e) {
+    var btn = e.target && e.target.closest ? e.target.closest('.variant-remove') : null;
+    if (!btn) return;
+    var row = btn.closest('.variant-row');
+    if (!row || !row.parentNode) return;
+    row.parentNode.removeChild(row);
+    if ($('variantesContainer').querySelectorAll('.variant-row').length === 0) {
+      $('variantesEmpty').classList.remove('hidden');
+    }
+    $('btnAddVariante').removeAttribute('disabled');
+    syncStockLock();
+  }
+
+  /** Stock edits re-derive the locked checkbox state (event-driven lock). */
+  function handleVariantesInput(e) {
+    if (e.target && e.target.classList && e.target.classList.contains('variant-stock')) {
+      syncStockLock();
+    }
   }
 
   function setPreview(img, url) {
@@ -1661,6 +1803,9 @@
       closeProductForm();
       renderProducts();
     });
+    $('btnAddVariante').addEventListener('click', function () { addVariantRow(null, null); });
+    $('variantesContainer').addEventListener('click', handleVariantesClick);
+    $('variantesContainer').addEventListener('input', handleVariantesInput);
     $('productoForm').addEventListener('submit', handleProductSubmit);
     $('textosForm').addEventListener('submit', handleTextsSubmit);
     bindProductTabs();
