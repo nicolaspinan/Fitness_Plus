@@ -9,10 +9,14 @@
  *     site-config → supabase → catalog → cart → main
  *
  * Owns the localStorage cart under key `fitnessplus_cart` (shape
- * { items: [{id, qty, name}], updatedAt }) and exposes the window.FPCart
- * API consumed by catalog.js (.btn-cart buttons). `in_stock` is an additive
- * reconciliation hint on each line (superset of the spec's minimal shape):
- * set to true at add time, refreshed by reconcile() from the live catalog.
+ * { items: [{id, qty, name, price, in_stock}], updatedAt }) and exposes
+ * the window.FPCart API consumed by catalog.js (.btn-cart buttons).
+ * `price` is the effective unit price (offer_price ?? price) snapshotted at
+ * add time and refreshed by reconcile() from the live catalog; `in_stock`
+ * is an additive reconciliation hint set to true at add time and refreshed
+ * by reconcile() as well. Both `price` and `in_stock` are supersets of the
+ * spec's minimal shape, kept so the drawer and WhatsApp message can show
+ * line subtotals and a grand total.
  *
  * Slice B builds the FAB/badge/drawer/scrim/toast UI (injected via
  * createElement — CSP script-src 'self' forbids inline handlers), the
@@ -34,10 +38,20 @@
 
   // ---- state -----------------------------------------------------------------
 
-  // Internal cart lines: { id, qty, name, in_stock }.
+  // Internal cart lines: { id, qty, name, price, in_stock }.
+  // `price` is the effective unit price (offer_price ?? price) snapshotted
+  // at add time and refreshed by reconcile() from the live catalog.
   var items = load();
 
   // ---- small helpers ----------------------------------------------------------
+
+  /** Format an integer as AR-style pesos: thousands separated by a period.
+   *  Duplicates catalog.js `formatPrice` verbatim (ES5) so the drawer and
+   *  the WhatsApp message render prices without depending on catalog.js
+   *  being loaded. Not exported. */
+  function formatPrice(n) {
+    return Number(n).toLocaleString('es-AR');
+  }
 
   /** Clamp any value to an integer within MIN_QTY..MAX_QTY. NaN, 0 or
    *  negatives yield 0 so callers can drop invalid lines. */
@@ -52,6 +66,17 @@
       if (items[i].id === id) return items[i];
     }
     return null;
+  }
+
+  /** Effective unit price for a catalog product: offer_price when set (not
+   *  null), otherwise the regular price. Use `!= null` rather than `||` so
+   *  a legitimate offer_price of 0 would still win — today offer_price is
+   *  either null or a positive integer, but the explicit check is safer.
+   *  Returns an integer (0 when neither field is present). */
+  function effectivePrice(p) {
+    if (p && p.offer_price != null) return Math.floor(Number(p.offer_price)) || 0;
+    if (p && p.price != null) return Math.floor(Number(p.price)) || 0;
+    return 0;
   }
 
   /** Persist the cart. Storage failures must never break the shopping flow —
@@ -88,10 +113,13 @@
         if (!it || it.id == null) continue;
         var qty = clampQty(it.qty);
         if (qty < MIN_QTY) continue; // malformed or empty line → drop
+        var price = Math.floor(Number(it.price));
+        if (isNaN(price) || price < 0) price = 0; // missing/invalid → 0 (reconcile fixes it)
         list.push({
           id: String(it.id),
           qty: qty,
           name: (it.name == null) ? '' : String(it.name),
+          price: price,
           in_stock: it.in_stock !== false
         });
       }
@@ -104,19 +132,24 @@
   // ---- API ---------------------------------------------------------------------
 
   /** Add a product (qty 1) or increment it when already in the cart (SC-02).
-   *  Snapshots the product name at add time; reconcile() later replaces it
-   *  with the catalog name when they differ (SC-01). */
-  function add(id, name) {
+   *  Snapshots the product name and effective unit price at add time; the
+   *  price is overwritten later by reconcile() with the live catalog price
+   *  when it differs (SC-01). `price` is optional — older callers that pass
+   *  only (id, name) get price 0, fixed on the next reconcile() pass. */
+  function add(id, name, price) {
     if (id == null) return;
     id = String(id);
     var item = findItem(id);
     if (item) {
       item.qty = Math.min(item.qty + 1, MAX_QTY);
     } else {
+      var unit = (price == null) ? 0 : (Math.floor(Number(price)) || 0);
+      if (unit < 0) unit = 0;
       items.push({
         id: id,
         qty: MIN_QTY,
         name: (name == null) ? '' : String(name),
+        price: unit,
         in_stock: true
       });
     }
@@ -183,31 +216,48 @@
     if (ui) refreshAll();
   }
 
-  /** Consolidated WhatsApp message (SC-03): header line plus one '• Nx NAME'
-   *  bullet per in-stock item — no prices, totals or grammatical articles.
-   *  When every line is out of stock the message contains only the header
-   *  and sending still proceeds. */
+  /** Consolidated WhatsApp message (SC-03): header line, one '• Nx NAME —
+   *  $SUBTOTAL (u. $UNIT)' bullet per in-stock item with its subtotal
+   *  (qty × effective unit price) and unit price, and a final 'Total: $SUM'
+   *  line that sums the subtotals of every in-stock line. Out-of-stock lines
+   *  are excluded from both the bullets and the total. When every line is
+   *  out of stock the message contains only the header and sending still
+   *  proceeds. */
   function buildMessage() {
     var lines = [];
+    var total = 0;
     for (var i = 0; i < items.length; i++) {
       if (items[i].in_stock) {
-        lines.push('• ' + items[i].qty + 'x ' + items[i].name);
+        var unit = items[i].price || 0;
+        var subtotal = unit * items[i].qty;
+        total += subtotal;
+        lines.push(
+          '\u2022 ' + items[i].qty + 'x ' + items[i].name +
+          ' \u2014 $' + formatPrice(subtotal) +
+          ' (u. $' + formatPrice(unit) + ')'
+        );
       }
     }
     var header = 'Hola, quiero comprar:';
-    return lines.length ? header + '\n' + lines.join('\n') : header;
+    if (!lines.length) return header;
+    return header + '\n' + lines.join('\n') + '\nTotal: $' + formatPrice(total);
   }
 
   /** Reconcile stored lines against the live catalog (SC-01): replace stored
-   *  names with catalog names and flag unknown/out-of-stock products so they
-   *  are shown as "sin stock" and excluded from the message. Called by
-   *  catalog.js once products are loaded. */
+   *  names and effective unit prices with catalog values and flag
+   *  unknown/out-of-stock products so they are shown as "sin stock" and
+   *  excluded from the message. Called by catalog.js once products are
+   *  loaded. The catalog product shape is { id, name, price, offer_price,
+   *  in_stock, ... }; the effective price is offer_price when set (not
+   *  null), otherwise price. Lines whose id is no longer in the catalog keep
+   *  their stored price (or 0). */
   function reconcile(products) {
     var byId = {};
     for (var i = 0; i < products.length; i++) {
       var p = products[i];
       byId[String(p.id)] = {
         name: (p.name == null) ? '' : String(p.name),
+        price: effectivePrice(p),
         in_stock: !!p.in_stock
       };
     }
@@ -217,6 +267,10 @@
       if (info) {
         if (items[j].name !== info.name) {
           items[j].name = info.name;
+          changed = true;
+        }
+        if (items[j].price !== info.price) {
+          items[j].price = info.price;
           changed = true;
         }
         if (items[j].in_stock !== info.in_stock) {
@@ -229,8 +283,9 @@
       }
     }
     if (changed) save();
-    // FIX-2: stock may have changed since the last save — refresh the UI now
-    // so the drawer and send path never use a stale in_stock flag.
+    // FIX-2: stock (and price) may have changed since the last save — refresh
+    // the UI now so the drawer and send path never use a stale in_stock flag
+    // or a stale price.
     if (ui) refreshAll();
   }
 
@@ -354,8 +409,36 @@
   }
 
   function renderDrawerContent() {
-    renderFooter();
     renderItems();
+    renderTotal();
+    renderFooter();
+  }
+
+  /** Render the grand-total row as the FIRST child of the footer (above the
+   *  Vaciar / Pedir buttons) so it sits between the items list and the
+   *  action buttons. Only in-stock lines contribute. Idempotent: rebuilds
+   *  the #cartTotal node on every render so stale prices are never shown. */
+  function renderTotal() {
+    var total = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].in_stock) {
+        total += (items[i].price || 0) * items[i].qty;
+      }
+    }
+    var prev = document.getElementById('cartTotal');
+    if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+    if (!items.length) return; // empty cart → no total row
+    var row = el('div', 'cart-total');
+    row.id = 'cartTotal';
+    row.setAttribute('role', 'status');
+    row.appendChild(el('span', 'cart-total-label', 'Total'));
+    row.appendChild(el('span', 'cart-total-amount', '$' + formatPrice(total)));
+    // Insert as the first child of the footer so the buttons stay below it.
+    if (ui.footerEl.firstChild) {
+      ui.footerEl.insertBefore(row, ui.footerEl.firstChild);
+    } else {
+      ui.footerEl.appendChild(row);
+    }
   }
 
   /** One line per item. In-stock lines get − qty + controls; lines flagged
@@ -376,6 +459,16 @@
         info.appendChild(el('span', 'cart-item-name', it.name || it.id));
         if (!it.in_stock) {
           info.appendChild(el('em', 'cart-item-oos', 'Sin stock'));
+        } else {
+          // In-stock line: show "qty × $unit = $subtotal" under the name.
+          // Price may be 0 before reconcile() runs — still rendered so the
+          // layout doesn't jump when the catalog arrives.
+          var unit = it.price || 0;
+          var subtotal = unit * it.qty;
+          info.appendChild(el(
+            'span', 'cart-item-price',
+            it.qty + ' \u00d7 $' + formatPrice(unit) + ' = $' + formatPrice(subtotal)
+          ));
         }
         row.appendChild(info);
         if (it.in_stock) {

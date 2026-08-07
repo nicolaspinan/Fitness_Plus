@@ -278,7 +278,19 @@
     if (!btn) return;
     e.stopPropagation();
     if (window.FPCart && window.FPCart.add) {
-      window.FPCart.add(btn.getAttribute('data-id'), btn.getAttribute('data-name'));
+      var id = btn.getAttribute('data-id');
+      // Pass the catalog's effective unit price (offer_price when set,
+      // otherwise price) so the cart drawer / WhatsApp total is correct.
+      var price = 0;
+      for (var i = 0; i < state.products.length; i++) {
+        if (state.products[i].id === id) {
+          price = (state.products[i].offer_price != null)
+            ? state.products[i].offer_price
+            : state.products[i].price;
+          break;
+        }
+      }
+      window.FPCart.add(id, btn.getAttribute('data-name'), price);
     }
   });
 

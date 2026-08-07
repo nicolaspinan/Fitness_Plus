@@ -1434,6 +1434,20 @@ section[id],
   color: var(--light-gray);
 }
 
+/* Per-line subtotal: "qty × $unit = $subtotal". Sits under the name, muted
+   and smaller than the name so the name stays the primary read. Aligned to
+   the same left edge as the name (not right). */
+.cart-item-price {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--light-gray);
+  line-height: 1.3;
+  text-align: left;
+}
+
 .cart-item-controls {
   display: flex;
   align-items: center;
@@ -1489,9 +1503,39 @@ section[id],
 
 .cart-footer {
   display: flex;
+  flex-wrap: wrap; /* allow the .cart-total row to sit above the button row */
   gap: 12px;
   padding: 16px 24px 20px;
   border-top: 1px solid var(--border-gray);
+}
+
+/* Grand-total row: pinned as the first footer child (above Vaciar / Pedir),
+   separated from the items list by the footer's top border. Label left,
+   amount right, stacked above the action buttons. Sum of in-stock line
+   subtotals only. */
+.cart-total {
+  flex: 1 0 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-gray);
+  margin-bottom: 4px;
+}
+
+.cart-total-label {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--black);
+}
+
+.cart-total-amount {
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--black);
 }
 
 .cart-footer .btn-pedir {
