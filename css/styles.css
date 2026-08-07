@@ -1810,8 +1810,9 @@ body.menu-open::before {
     pointer-events: auto;
   }
 
-  .dropdown-menu.show {
+  .nav-links .dropdown-menu.show {
     display: block;
+    transform: none;
   }
 
   .nav-links .dropdown-cat-link {
