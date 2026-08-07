@@ -779,6 +779,10 @@
     });
   }
 
+  function hasVariants(p) {
+    return !!(p && Array.isArray(p.variants) && p.variants.length > 0);
+  }
+
   function productMetaEl(p) {
     var meta = document.createElement('div');
     meta.className = 'row-meta';
@@ -819,6 +823,12 @@
       f.className = 'row-badge badge-featured';
       f.textContent = '★ DESTACADO';
       meta.appendChild(f);
+    }
+    if (hasVariants(p)) {
+      var vCount = document.createElement('span');
+      vCount.className = 'row-meta-variants';
+      vCount.textContent = p.variants.length + (p.variants.length === 1 ? ' variante' : ' variantes');
+      meta.appendChild(vCount);
     }
     return meta;
   }
@@ -1480,6 +1490,49 @@
     errEl.classList.remove('hidden');
   }
 
+  /**
+   * Read the variant rows into a payload-ready array, validating per FV-1:
+   * trimmed non-empty name ≤ 40 chars, unique case-insensitively, ≤ 10 rows,
+   * integer stock 0..9999. Fully-empty rows are skipped; a name-only row gets
+   * stock 0. Returns {rows} or {error} in the existing Spanish error style.
+   */
+  function collectVariantRows() {
+    var rows = [];
+    var seen = {};
+    var rowEls = $('variantesContainer').querySelectorAll('.variant-row');
+
+    if (rowEls.length > MAX_VARIANTS) {
+      return { error: 'No podés cargar más de ' + MAX_VARIANTS + ' variantes.' };
+    }
+
+    for (var i = 0; i < rowEls.length; i++) {
+      var nameInput = rowEls[i].querySelector('.variant-name');
+      var stockInput = rowEls[i].querySelector('.variant-stock');
+      var name = (nameInput ? nameInput.value : '').trim();
+      var stockRaw = stockInput ? stockInput.value.trim() : '';
+
+      if (!name && stockRaw === '') continue; // fully-empty row: skip
+
+      if (!name) return { error: 'Ingresá el nombre de la variante.' };
+      if (name.length > MAX_VARIANT_NAME_LENGTH) {
+        return { error: 'El nombre de la variante no puede superar los ' + MAX_VARIANT_NAME_LENGTH + ' caracteres.' };
+      }
+
+      var lower = name.toLowerCase();
+      if (seen[lower]) return { error: 'Ya existe una variante llamada "' + name + '".' };
+      seen[lower] = true;
+
+      var stock = stockRaw === '' ? 0 : Number(stockRaw);
+      if (!isFinite(stock) || Math.floor(stock) !== stock || stock < 0 || stock > MAX_VARIANT_STOCK) {
+        return { error: 'El stock de "' + name + '" debe ser un número entero entre 0 y ' + MAX_VARIANT_STOCK + '.' };
+      }
+
+      rows.push({ name: name, stock: stock });
+    }
+
+    return { rows: rows };
+  }
+
   function validateProductPayload() {
     var name = $('prod-name').value.trim();
     var brand = $('prod-brand').value.trim();
@@ -1521,6 +1574,10 @@
       return { error: 'La URL de la tabla nutricional debe ser una URL válida (http/https).' };
     }
 
+    var variantResult = collectVariantRows();
+    if (variantResult.error) return variantResult;
+    var rows = variantResult.rows;
+
     return {
       name: name,
       brand: brand,
@@ -1531,7 +1588,8 @@
       full_desc: fullDesc,
       image_url: imageUrl,
       nutrition_image_url: nutritionUrl || null,
-      in_stock: $('prod-stock').checked,
+      variants: rows.length ? rows : null,
+      in_stock: rows.length ? rows.some(function (v) { return v.stock > 0; }) : $('prod-stock').checked,
       is_featured: $('prod-featured').checked
     };
   }
