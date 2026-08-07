@@ -295,8 +295,11 @@
     var pedir;
     var cartBtn = '';
     if (effectiveInStock(p)) {
+      // data-variant only exists when the product really has variants —
+      // variant-less products get a plain .btn-cart without the attribute.
+      var variantAttr = hasVariants(p) ? ' data-variant="' + escapeHtml(sel) + '"' : '';
       pedir = '<a href="' + waLink(p, sel) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ' + escapeHtml(p.name) + ' por WhatsApp">Pedir</a>';
-      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '" data-variant="' + escapeHtml(sel) + '">Agregar</button>';
+      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '"' + variantAttr + '>Agregar</button>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1">Pedir</span>';
     }
@@ -669,8 +672,11 @@
     var pedir;
     var cartBtn = '';
     if (effectiveInStock(p)) {
+      // data-variant only exists when the product really has variants —
+      // variant-less products get a plain .btn-cart without the attribute.
+      var variantAttr = hasVariants(p) ? ' data-variant="' + escapeHtml(sel) + '"' : '';
       pedir = '<a href="' + waLink(p, sel) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" id="btnPedirDetalle">Pedir</a>';
-      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '" data-variant="' + escapeHtml(sel) + '">Agregar</button>';
+      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '"' + variantAttr + '>Agregar</button>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1" id="btnPedirDetalle">Pedir</span>';
     }
