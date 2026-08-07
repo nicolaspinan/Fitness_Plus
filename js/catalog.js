@@ -386,7 +386,10 @@
           break;
         }
       }
-      window.FPCart.add(id, btn.getAttribute('data-name'), price);
+      // data-variant only exists when the product really has variants (PR 1
+      // fix 0e07ec6) — variant-less products pass '' and keep today's line.
+      var variant = btn.getAttribute('data-variant') || '';
+      window.FPCart.add(id, btn.getAttribute('data-name'), price, variant);
     }
   });
 

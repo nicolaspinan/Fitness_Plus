@@ -61,9 +61,29 @@
     return n > MAX_QTY ? MAX_QTY : n;
   }
 
-  function findItem(id) {
+  /** Normalize a variant name for cart identity: '' when absent, trimmed.
+   *  '' is the variant-less sentinel (orchestrator contract; load() maps
+   *  legacy null/missing variants to it so old carts keep working, SC-9). */
+  function normVariant(v) {
+    return String(v == null ? '' : v).trim();
+  }
+
+  /** Composite line identity: product id + variant, keyed as `id + '::' +
+   *  variant` ('' = no variant). Trim + case-SENSITIVE on the variant name
+   *  (Architecture Decision): the chips only emit canonical admin names and
+   *  reconcile() refreshes stored line names to canonical casing before any
+   *  drawer interaction, so an exact compare is safe and simplest. */
+  function itemKey(id, variant) {
+    return id + '::' + normVariant(variant);
+  }
+
+  /** Find a line by its composite (id, variant) identity — never by id
+   *  alone, or two flavors of one product would merge into a single line. */
+  function findItem(id, variant) {
+    if (id == null) return null;
+    var key = itemKey(id, variant);
     for (var i = 0; i < items.length; i++) {
-      if (items[i].id === id) return items[i];
+      if (itemKey(items[i].id, items[i].variant) === key) return items[i];
     }
     return null;
   }
@@ -77,6 +97,25 @@
     if (p && p.offer_price != null) return Math.floor(Number(p.offer_price)) || 0;
     if (p && p.price != null) return Math.floor(Number(p.price)) || 0;
     return 0;
+  }
+
+  // Flavor-variant stock helpers — duplicated from catalog.js verbatim
+  // (same rationale as formatPrice: cart.js is standalone ES5, no imports).
+  // A product with a non-empty variants array derives its stock from the
+  // variants (any stock > 0); a variant-less product keeps today's manual
+  // in_stock flag (FV-2).
+
+  function effectiveInStock(p) {
+    var v = p && p.variants;
+    if (Array.isArray(v) && v.length) {
+      for (var i = 0; i < v.length; i++) if (Number(v[i].stock) > 0) return true;
+      return false;
+    }
+    return !!(p && p.in_stock);
+  }
+
+  function hasVariants(p) {
+    return Array.isArray(p && p.variants) && p.variants.length > 0;
   }
 
   /** Persist the cart. Storage failures must never break the shopping flow —
@@ -120,6 +159,7 @@
           qty: qty,
           name: (it.name == null) ? '' : String(it.name),
           price: price,
+          variant: (it.variant == null) ? '' : String(it.variant).trim(),
           in_stock: it.in_stock !== false
         });
       }
@@ -131,15 +171,17 @@
 
   // ---- API ---------------------------------------------------------------------
 
-  /** Add a product (qty 1) or increment it when already in the cart (SC-02).
+  /** Add a product (qty 1) or increment it when the SAME (id, variant)
+   *  line is already in the cart (SC-02, FV-4). `variant` is the flavor
+   *  name ('' = no variant); each flavor is its own line with its own qty.
    *  Snapshots the product name and effective unit price at add time; the
    *  price is overwritten later by reconcile() with the live catalog price
    *  when it differs (SC-01). `price` is optional — older callers that pass
    *  only (id, name) get price 0, fixed on the next reconcile() pass. */
-  function add(id, name, price) {
+  function add(id, name, price, variant) {
     if (id == null) return;
     id = String(id);
-    var item = findItem(id);
+    var item = findItem(id, variant);
     if (item) {
       item.qty = Math.min(item.qty + 1, MAX_QTY);
     } else {
@@ -150,6 +192,7 @@
         qty: MIN_QTY,
         name: (name == null) ? '' : String(name),
         price: unit,
+        variant: normVariant(variant),
         in_stock: true
       });
     }
@@ -160,12 +203,14 @@
     }
   }
 
-  /** Remove a product line entirely (used by the drawer − control at qty 1). */
-  function remove(id) {
+  /** Remove one (id, variant) line entirely (used by the drawer − control at
+   *  qty 1). Removing one flavor never touches the other flavors' lines. */
+  function remove(id, variant) {
     if (id == null) return;
     id = String(id);
+    var key = itemKey(id, variant);
     for (var i = 0; i < items.length; i++) {
-      if (items[i].id === id) {
+      if (itemKey(items[i].id, items[i].variant) === key) {
         items.splice(i, 1);
         save();
         if (ui) refreshAll();
@@ -174,21 +219,22 @@
     }
   }
 
-  /** Set the quantity of a line. qty < 1 removes the line (decrement at 1);
-   *  setQty(id, 1) on a missing id behaves like add() so the drawer can
-   *  rebuild a line from the id alone (name fixed later by reconcile);
-   *  existing lines are set exactly and capped at MAX_QTY. */
-  function setQty(id, qty) {
+  /** Set the quantity of a (id, variant) line. qty < 1 removes the line
+   *  (decrement at 1); setQty(id, variant, 1) on a missing line behaves like
+   *  add() so the drawer can rebuild it from id + variant alone (name/price
+   *  fixed later by reconcile); existing lines are set exactly and capped at
+   *  MAX_QTY. */
+  function setQty(id, variant, qty) {
     if (id == null) return;
     id = String(id);
     var n = clampQty(qty);
     if (n < MIN_QTY) {
-      remove(id);
+      remove(id, variant);
       return;
     }
-    var item = findItem(id);
+    var item = findItem(id, variant);
     if (!item) {
-      add(id, '');
+      add(id, '', 0, variant);
       return;
     }
     item.qty = n;
@@ -233,6 +279,7 @@
         total += subtotal;
         lines.push(
           '\u2022 ' + items[i].qty + 'x ' + items[i].name +
+          (items[i].variant ? ' (' + items[i].variant + ')' : '') +
           ' \u2014 $' + formatPrice(subtotal) +
           ' (u. $' + formatPrice(unit) + ')'
         );
@@ -243,14 +290,36 @@
     return header + '\n' + lines.join('\n') + '\nTotal: $' + formatPrice(total);
   }
 
+  /** Variant lookup map { lowerName: { name: canonical, stock: int } } for a
+   *  product, or {} when it has no variants. Keyed by lowercase so reconcile
+   *  can find a line's flavor regardless of stored casing; the canonical
+   *  `name` refreshes the line to admin casing afterwards (the cart key
+   *  itself stays trim + case-SENSITIVE by Architecture Decision). */
+  function variantsMap(p) {
+    var map = {};
+    if (!hasVariants(p)) return map;
+    for (var i = 0; i < p.variants.length; i++) {
+      var v = p.variants[i];
+      var nm = String(v.name == null ? '' : v.name).trim();
+      if (!nm) continue;
+      map[nm.toLowerCase()] = { name: nm, stock: Math.floor(Number(v.stock)) || 0 };
+    }
+    return map;
+  }
+
   /** Reconcile stored lines against the live catalog (SC-01): replace stored
    *  names and effective unit prices with catalog values and flag
    *  unknown/out-of-stock products so they are shown as "sin stock" and
    *  excluded from the message. Called by catalog.js once products are
    *  loaded. The catalog product shape is { id, name, price, offer_price,
-   *  in_stock, ... }; the effective price is offer_price when set (not
-   *  null), otherwise price. Lines whose id is no longer in the catalog keep
-   *  their stored price (or 0). */
+   *  in_stock, variants, ... }; the effective price is offer_price when set
+   *  (not null), otherwise price. Flavor-aware (FV-4, SC-5): a flavored line
+   *  is in stock iff its variant exists with stock > 0 (missing/renamed/
+   *  0-stock flavor, or a variant line on a variant-less product → "sin
+   *  stock"); a legacy ''-variant line on a product that now HAS variants is
+   *  an ambiguous unflavored order → flagged "sin stock" too and excluded
+   *  from the message. Lines whose id is no longer in the catalog keep their
+   *  stored price (or 0). */
   function reconcile(products) {
     var byId = {};
     for (var i = 0; i < products.length; i++) {
@@ -258,7 +327,8 @@
       byId[String(p.id)] = {
         name: (p.name == null) ? '' : String(p.name),
         price: effectivePrice(p),
-        in_stock: !!p.in_stock
+        in_stock: effectiveInStock(p),
+        variants: variantsMap(p)
       };
     }
     var changed = false;
@@ -273,8 +343,31 @@
           items[j].price = info.price;
           changed = true;
         }
-        if (items[j].in_stock !== info.in_stock) {
-          items[j].in_stock = info.in_stock;
+        var inStock;
+        if (items[j].variant) {
+          // Flavored line: in stock iff the variant exists with stock > 0.
+          // A missing/renamed/0-stock flavor — or any flavor on a product
+          // that has no variants — flags the line out of stock (FV-4).
+          var vinfo = info.variants[items[j].variant.toLowerCase()];
+          if (vinfo && vinfo.stock > 0) {
+            inStock = true;
+            if (items[j].variant !== vinfo.name) {
+              items[j].variant = vinfo.name; // refresh canonical casing
+              changed = true;
+            }
+          } else {
+            inStock = false;
+          }
+        } else if (Object.keys(info.variants).length > 0) {
+          // Legacy ''-variant line on a variant-ful product: the unflavored
+          // order is ambiguous → flagged out of stock (amended design).
+          inStock = false;
+        } else {
+          // Unflavored line on a variant-less product: today's behavior.
+          inStock = info.in_stock;
+        }
+        if (items[j].in_stock !== inStock) {
+          items[j].in_stock = inStock;
           changed = true;
         }
       } else if (items[j].in_stock !== false) {
@@ -441,6 +534,13 @@
     }
   }
 
+  /** Display label for a line: product name + flavor suffix when present,
+   *  e.g. "CREATINA MYPROTEIN (Naranja)". Rendered via textContent in the
+   *  drawer, so no HTML escaping is needed (XSS-safe). */
+  function lineLabel(it) {
+    return (it.name || it.id) + (it.variant ? ' (' + it.variant + ')' : '');
+  }
+
   /** One line per item. In-stock lines get − qty + controls; lines flagged
    *  "sin stock" by reconcile() are non-interactive (no controls). */
   function renderItems() {
@@ -455,8 +555,9 @@
         var it = items[i];
         var row = el('div', 'cart-item');
         row.setAttribute('data-id', it.id);
+        row.setAttribute('data-variant', it.variant || '');
         var info = el('div', 'cart-item-info');
-        info.appendChild(el('span', 'cart-item-name', it.name || it.id));
+        info.appendChild(el('span', 'cart-item-name', lineLabel(it)));
         if (!it.in_stock) {
           info.appendChild(el('em', 'cart-item-oos', 'Sin stock'));
         } else {
@@ -476,12 +577,14 @@
           var minus = el('button', 'cart-qty-minus', '\u2212');
           minus.type = 'button';
           minus.setAttribute('data-id', it.id);
-          minus.setAttribute('aria-label', 'Quitar una unidad de ' + (it.name || it.id));
+          minus.setAttribute('data-variant', it.variant || '');
+          minus.setAttribute('aria-label', 'Quitar una unidad de ' + lineLabel(it));
           var qty = el('span', 'cart-qty', String(it.qty));
           var plus = el('button', 'cart-qty-plus', '+');
           plus.type = 'button';
           plus.setAttribute('data-id', it.id);
-          plus.setAttribute('aria-label', 'Agregar una unidad de ' + (it.name || it.id));
+          plus.setAttribute('data-variant', it.variant || '');
+          plus.setAttribute('aria-label', 'Agregar una unidad de ' + lineLabel(it));
           ctl.appendChild(minus);
           ctl.appendChild(qty);
           ctl.appendChild(plus);
@@ -541,15 +644,20 @@
     }
     if (!minus && !plus) return;
     e.preventDefault();
-    var id = (minus || plus).getAttribute('data-id');
-    var item = findItem(id);
+    var ctl = minus || plus;
+    var id = ctl.getAttribute('data-id');
+    // Composite identity from the control itself: the ± buttons carry
+    // data-variant alongside data-id (amended design, finding 1), so one
+    // flavor's −/+ never touches the sibling flavor's line.
+    var variant = ctl.getAttribute('data-variant') || '';
+    var item = findItem(id, variant);
     if (plus) {
-      setQty(id, (item ? item.qty : 1) + 1); // capped at 99 by clampQty
-      refocusControl('cart-qty-plus', id);
+      setQty(id, variant, (item ? item.qty : 1) + 1); // capped at 99 by clampQty
+      refocusControl('cart-qty-plus', id, variant);
     } else {
-      setQty(id, (item ? item.qty : 1) - 1); // qty 1 → 0 → remove
-      if (findItem(id)) {
-        refocusControl('cart-qty-minus', id);
+      setQty(id, variant, (item ? item.qty : 1) - 1); // qty 1 → 0 → remove
+      if (findItem(id, variant)) {
+        refocusControl('cart-qty-minus', id, variant);
       } else {
         // Line removed: move focus to the first remaining control or Vaciar.
         var next = ui.controls.length ? ui.controls[0] : ui.vaciar;
@@ -558,11 +666,14 @@
     }
   }
 
-  /** Keep focus on the same ± control after its re-render. */
-  function refocusControl(cls, id) {
+  /** Keep focus on the same ± control after its re-render (matched by
+   *  data-id AND data-variant — an id-only match would refocus the sibling
+   *  flavor's control after one flavor's line is removed). */
+  function refocusControl(cls, id, variant) {
     for (var i = 0; i < ui.controls.length; i++) {
       if (ui.controls[i].className === cls &&
-          ui.controls[i].getAttribute('data-id') === id) {
+          ui.controls[i].getAttribute('data-id') === id &&
+          (ui.controls[i].getAttribute('data-variant') || '') === (variant || '')) {
         ui.controls[i].focus();
         return;
       }
