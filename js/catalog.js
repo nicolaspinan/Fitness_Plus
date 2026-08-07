@@ -219,6 +219,44 @@
     return cardObserver;
   }
 
+  // ---- flavor variants: selection state + chips ---------------------------------
+  // Selection is kept per product object (WeakMap) so it survives card
+  // re-renders — the product object persists in state.products. The detail
+  // page resolves via detailProduct. Card → detail navigation does NOT carry
+  // the selection: the detail page starts from the first in-stock variant on
+  // the same page load (design decision, no cross-session persistence).
+
+  var selectedVariantByProduct = new WeakMap();
+  var detailProduct = null;
+
+  /** Stored selection when that variant still has stock, else first in-stock
+   *  variant (array order). */
+  function getSelectedVariant(p) {
+    var stored = selectedVariantByProduct.get(p);
+    if (stored && variantStock(p, stored) > 0) return stored;
+    var v = p && p.variants;
+    if (Array.isArray(v)) {
+      for (var i = 0; i < v.length; i++) {
+        if (Number(v[i].stock) > 0) return v[i].name;
+      }
+    }
+    return '';
+  }
+
+  /** One chip button. 0-stock variants render visible but disabled + struck
+   *  through (SC-2); data-variant and text go through escapeHtml (FV-3 XSS). */
+  function variantChipHtml(v, sel) {
+    var name = String(v.name == null ? '' : v.name);
+    var stock = Number(v.stock);
+    var selected = stock > 0 && String(sel).trim().toLowerCase() === name.trim().toLowerCase();
+    var disabled = !(stock > 0);
+    var cls = 'variant-chip' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
+    var attrs = 'type="button" class="' + cls + '" data-variant="' + escapeHtml(name) + '"' +
+      ' aria-pressed="' + (selected ? 'true' : 'false') + '"' +
+      (disabled ? ' aria-disabled="true"' : '');
+    return '<button ' + attrs + '>' + escapeHtml(name) + '</button>';
+  }
+
   // ---- cards -------------------------------------------------------------------
 
   /**
@@ -243,18 +281,29 @@
       precioRow = '<p class="precio" aria-label="Precio ' + escapeHtml(formatPrice(precio)) + ' pesos">$' + escapeHtml(formatPrice(precio)) + '</p>';
     }
 
+    var sel = getSelectedVariant(p);
+
+    // Flavor chips — separate block ABOVE the flex price row (never a third
+    // child of .precio-row, whose space-between layout must stay untouched).
+    // All variants 0 → SIN STOCK card, no selector (SC-3).
+    var chips = '';
+    if (effectiveInStock(p) && hasVariants(p)) {
+      chips = '<div class="variant-selector" role="group" aria-label="Sabor">' +
+        p.variants.map(function (v) { return variantChipHtml(v, sel); }).join('') + '</div>';
+    }
+
     var pedir;
     var cartBtn = '';
-    if (p.in_stock) {
-      pedir = '<a href="' + waLink(p) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ' + escapeHtml(p.name) + ' por WhatsApp">Pedir</a>';
-      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '">Agregar</button>';
+    if (effectiveInStock(p)) {
+      pedir = '<a href="' + waLink(p, sel) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" aria-label="Pedir ' + escapeHtml(p.name) + ' por WhatsApp">Pedir</a>';
+      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '" data-variant="' + escapeHtml(sel) + '">Agregar</button>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1">Pedir</span>';
     }
 
     // In-stock cards group Pedir + cart button in a flex .btn-group; the
     // out-of-stock card keeps the disabled Pedir alone (previous markup).
-    var actionRow = p.in_stock ? '<div class="btn-group">' + pedir + cartBtn + '</div>' : pedir;
+    var actionRow = effectiveInStock(p) ? '<div class="btn-group">' + pedir + cartBtn + '</div>' : pedir;
 
     return '<div class="producto-img">' +
       '<img src="' + escapeHtml(p.image_url) + '" alt="' + escapeHtml(p.name) + '" loading="lazy" width="400" height="240">' +
@@ -263,6 +312,7 @@
       '<div class="producto-info">' +
       '<h3>' + escapeHtml(p.name) + '</h3>' +
       '<p class="descripcion">' + escapeHtml(p.short_desc) + '</p>' +
+      chips +
       '<div class="precio-row">' + precioRow + actionRow + '</div>' +
       '</div>';
   }
@@ -286,18 +336,20 @@
     var card = document.createElement('div');
     card.className = 'producto-card reveal';
     card.setAttribute('role', 'listitem');
+    card.setAttribute('data-id', product.id);
     var precio = (product.offer_price != null) ? product.offer_price : product.price;
     card.setAttribute('aria-label', product.name + ' — $' + formatPrice(precio));
     card.tabIndex = 0;
     card.addEventListener('click', function (e) {
-      if (e.target.closest('.btn-pedir, .btn-cart')) return;
+      if (e.target.closest('.btn-pedir, .btn-cart, .variant-chip')) return;
       window.location.href = 'producto.html?id=' + product.id;
     });
     card.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' || e.key === ' ') {
-        // Guard BEFORE preventDefault so a focused .btn-pedir / .btn-cart
-        // control fires its own native activation (keyboard accessibility).
-        if (e.target.closest('.btn-pedir, .btn-cart')) return;
+        // Guard BEFORE preventDefault so a focused .btn-pedir / .btn-cart /
+        // .variant-chip control fires its own native activation (keyboard
+        // accessibility — Enter/Space selects a chip instead of navigating).
+        if (e.target.closest('.btn-pedir, .btn-cart, .variant-chip')) return;
         e.preventDefault();
         window.location.href = 'producto.html?id=' + product.id;
       }
@@ -333,6 +385,39 @@
       }
       window.FPCart.add(id, btn.getAttribute('data-name'), price);
     }
+  });
+
+  // ---- variant chip delegation -------------------------------------------------
+  // Document-level listener for .variant-chip (mirrors .btn-cart above): a
+  // chip click selects the flavor in place (no re-render → focus is kept) and
+  // updates the sibling Pedir href + cart data-variant. The card click/keydown
+  // guards already ignore .variant-chip, so no navigation happens here (SC-8).
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest('.variant-chip');
+    if (!chip || chip.classList.contains('disabled')) return;
+    e.stopPropagation();
+    var card = chip.closest('.producto-card');
+    var product = card ? productById(card.getAttribute('data-id')) : detailProduct;
+    if (!product) return;
+    var name = chip.getAttribute('data-variant');
+    selectedVariantByProduct.set(product, name);
+
+    // 1. In-place selection state (sibling chips cleared, aria-pressed synced).
+    var chips = chip.parentNode.querySelectorAll('.variant-chip');
+    for (var i = 0; i < chips.length; i++) {
+      var isSelected = chips[i] === chip;
+      chips[i].classList.toggle('selected', isSelected);
+      chips[i].setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    }
+
+    // 2. Pedir href recomputed for the selected flavor.
+    var pedirLink = card ? card.querySelector('.btn-pedir') : document.getElementById('btnPedirDetalle');
+    if (pedirLink) pedirLink.setAttribute('href', waLink(product, name));
+
+    // 3. Cart button carries the selection (NOT chip siblings — the detail
+    //    cart button lives in .detalle-precio-row, outside the selector).
+    var cartBtn = card ? card.querySelector('.btn-cart') : document.querySelector('.detalle-info .btn-cart');
+    if (cartBtn) cartBtn.setAttribute('data-variant', name);
   });
 
   // ---- navbar -------------------------------------------------------------------
@@ -570,16 +655,27 @@
       precioHtml = '$' + escapeHtml(formatPrice(p.price));
     }
 
+    var sel = getSelectedVariant(p);
+
+    // Flavor chips — separate block ABOVE .detalle-precio-row (same rule as
+    // the card: never inside the flex space-between price row). All variants
+    // 0 → SIN STOCK + disabled Pedir, no selector (SC-3).
+    var chips = '';
+    if (effectiveInStock(p) && hasVariants(p)) {
+      chips = '<div class="variant-selector" role="group" aria-label="Sabor">' +
+        p.variants.map(function (v) { return variantChipHtml(v, sel); }).join('') + '</div>';
+    }
+
     var pedir;
     var cartBtn = '';
-    if (p.in_stock) {
-      pedir = '<a href="' + waLink(p) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" id="btnPedirDetalle">Pedir</a>';
-      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '">Agregar</button>';
+    if (effectiveInStock(p)) {
+      pedir = '<a href="' + waLink(p, sel) + '" target="_blank" rel="noopener noreferrer" class="btn-pedir" id="btnPedirDetalle">Pedir</a>';
+      cartBtn = '<button type="button" class="btn-cart" data-id="' + escapeHtml(p.id) + '" data-name="' + escapeHtml(p.name) + '" data-variant="' + escapeHtml(sel) + '">Agregar</button>';
     } else {
       pedir = '<span class="btn-pedir disabled" aria-disabled="true" tabindex="-1" id="btnPedirDetalle">Pedir</span>';
     }
 
-    var actionRow = p.in_stock ? '<div class="btn-group">' + pedir + cartBtn + '</div>' : pedir;
+    var actionRow = effectiveInStock(p) ? '<div class="btn-group">' + pedir + cartBtn + '</div>' : pedir;
 
     return '<div class="container detalle-container">' +
       '<div class="detalle-imagen" id="detalleImagen">' + buildSliderHtml(p) + '</div>' +
@@ -587,6 +683,7 @@
       badgesHtml +
       '<h2 id="detalleNombre">' + escapeHtml(p.name) + '</h2>' +
       '<p class="detalle-descripcion" id="detalleDescripcion">' + escapeHtml(p.full_desc) + '</p>' +
+      chips +
       '<div class="detalle-precio-row">' +
       '<p class="detalle-precio" id="detallePrecio">' + precioHtml + '</p>' +
       actionRow +
@@ -768,6 +865,7 @@
   }
 
   function renderDetail(p) {
+    detailProduct = p; // used by the chip delegation to resolve the product
     var nombre = document.getElementById('productoNombre');
     if (nombre) nombre.textContent = p.name;
     var detalle = document.getElementById('productoDetalle');
