@@ -95,6 +95,44 @@
     return Number(n).toLocaleString('es-AR');
   }
 
+  // ---- flavor variants: derived stock -----------------------------------------
+  // A product with a non-empty variants array derives its stock from the
+  // variants (any stock > 0); a variant-less product keeps today's manual
+  // in_stock flag. NULL/[] variants = byte-identical current behavior (FV-1).
+
+  function effectiveInStock(p) {
+    var v = p && p.variants;
+    if (Array.isArray(v) && v.length) {
+      for (var i = 0; i < v.length; i++) if (Number(v[i].stock) > 0) return true;
+      return false;
+    }
+    return !!(p && p.in_stock);
+  }
+
+  /** Stock of the named variant (trim + case-insensitive match) or null when
+   *  the product has no such variant. */
+  function variantStock(p, name) {
+    var v = p && p.variants;
+    if (!Array.isArray(v)) return null;
+    var target = String(name).trim().toLowerCase();
+    for (var i = 0; i < v.length; i++) {
+      if (String(v[i].name).trim().toLowerCase() === target) return Number(v[i].stock);
+    }
+    return null;
+  }
+
+  function hasVariants(p) {
+    return Array.isArray(p && p.variants) && p.variants.length > 0;
+  }
+
+  /** Resolve a product object by id (linear scan over the loaded catalog). */
+  function productById(id) {
+    for (var i = 0; i < state.products.length; i++) {
+      if (state.products[i].id === id) return state.products[i];
+    }
+    return null;
+  }
+
   /** Grammatical article per product name so the WhatsApp message reads
    *  "un" (masculine) or "una" (feminine) correctly — e.g. "una creatina",
    *  "un pre-workout". Products not listed fall back to no article. */
@@ -106,10 +144,13 @@
     'PRE-WORKOUT PUMP V8': 'un'
   };
 
-  /** WhatsApp deep link with the product name and its grammatical article. */
-  function waLink(product) {
+  /** WhatsApp deep link with the product name, its grammatical article and an
+   *  optional flavor suffix ("sabor Naranja") — FV-6 exact format. Variant-less
+   *  products (no variantName) keep today's byte-identical message. */
+  function waLink(product, variantName) {
     var article = PRODUCT_ARTICLES[product.name] || '';
     var msg = 'Hola, quiero comprar ' + (article ? article + ' ' : '') + product.name;
+    if (variantName) msg += ' sabor ' + variantName;
     return 'https://wa.me/' + WHATSAPP_NUMBER + '?text=' + encodeURIComponent(msg);
   }
 
@@ -190,7 +231,7 @@
     var precio = (p.offer_price != null) ? p.offer_price : p.price;
     var badges = '';
     if (p.offer_price != null) badges += '<span class="badge badge-oferta">OFERTA</span>';
-    if (!p.in_stock) badges += '<span class="badge badge-agotado">SIN STOCK</span>';
+    if (!effectiveInStock(p)) badges += '<span class="badge badge-agotado">SIN STOCK</span>';
 
     var precioRow;
     if (p.offer_price != null) {
@@ -518,7 +559,7 @@
   function buildDetailMarkup(p) {
     var badges = '';
     if (p.offer_price != null) badges += '<span class="badge badge-oferta">OFERTA</span>';
-    if (!p.in_stock) badges += '<span class="badge badge-agotado">SIN STOCK</span>';
+    if (!effectiveInStock(p)) badges += '<span class="badge badge-agotado">SIN STOCK</span>';
     var badgesHtml = badges ? '<div class="detalle-badges">' + badges + '</div>' : '';
 
     var precioHtml;
@@ -699,7 +740,7 @@
         'url': url,
         'priceCurrency': 'ARS',
         'price': (p.offer_price != null) ? p.offer_price : p.price,
-        'availability': p.in_stock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+        'availability': effectiveInStock(p) ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
         'itemCondition': 'https://schema.org/NewCondition'
       }
     });
