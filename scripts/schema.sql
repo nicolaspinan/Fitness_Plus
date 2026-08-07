@@ -52,7 +52,9 @@ create table products (
   in_stock boolean not null default true,
   is_featured boolean not null default false,
   sort_order int not null default 0,
-  home_order int
+  home_order int,
+  -- NULL or [] = no variants (current behavior); shape [{name, stock}]
+  variants jsonb
 );
 
 create table site_texts (
@@ -62,6 +64,19 @@ create table site_texts (
 
 create index products_category_idx on products (category_id, sort_order);
 create index products_featured_idx on products (is_featured, home_order) where is_featured;
+
+-- -----------------------------------------------------------------------------
+-- Flavor variants — live DB migration (SAFE TO RE-RUN)
+-- -----------------------------------------------------------------------------
+-- Adds the `variants` column to products on databases created before the
+-- column existed (fresh installs get it from the create table block above).
+-- Idempotent, unlike the run-once create-table section: re-running it is a
+-- no-op. Run this once in the Supabase SQL Editor (Project → SQL Editor →
+-- New query) against the live DB:
+--
+--     alter table products add column if not exists variants jsonb;
+
+alter table products add column if not exists variants jsonb;
 
 -- -----------------------------------------------------------------------------
 -- Row Level Security
