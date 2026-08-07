@@ -260,6 +260,7 @@
         total += subtotal;
         lines.push(
           '\u2022 ' + items[i].qty + 'x ' + items[i].name +
+          (items[i].variant ? ' (' + items[i].variant + ')' : '') +
           ' \u2014 $' + formatPrice(subtotal) +
           ' (u. $' + formatPrice(unit) + ')'
         );
