@@ -61,9 +61,29 @@
     return n > MAX_QTY ? MAX_QTY : n;
   }
 
-  function findItem(id) {
+  /** Normalize a variant name for cart identity: '' when absent, trimmed.
+   *  '' is the variant-less sentinel (orchestrator contract; load() maps
+   *  legacy null/missing variants to it so old carts keep working, SC-9). */
+  function normVariant(v) {
+    return String(v == null ? '' : v).trim();
+  }
+
+  /** Composite line identity: product id + variant, keyed as `id + '::' +
+   *  variant` ('' = no variant). Trim + case-SENSITIVE on the variant name
+   *  (Architecture Decision): the chips only emit canonical admin names and
+   *  reconcile() refreshes stored line names to canonical casing before any
+   *  drawer interaction, so an exact compare is safe and simplest. */
+  function itemKey(id, variant) {
+    return id + '::' + normVariant(variant);
+  }
+
+  /** Find a line by its composite (id, variant) identity — never by id
+   *  alone, or two flavors of one product would merge into a single line. */
+  function findItem(id, variant) {
+    if (id == null) return null;
+    var key = itemKey(id, variant);
     for (var i = 0; i < items.length; i++) {
-      if (items[i].id === id) return items[i];
+      if (itemKey(items[i].id, items[i].variant) === key) return items[i];
     }
     return null;
   }
@@ -120,6 +140,7 @@
           qty: qty,
           name: (it.name == null) ? '' : String(it.name),
           price: price,
+          variant: (it.variant == null) ? '' : String(it.variant).trim(),
           in_stock: it.in_stock !== false
         });
       }
@@ -131,15 +152,17 @@
 
   // ---- API ---------------------------------------------------------------------
 
-  /** Add a product (qty 1) or increment it when already in the cart (SC-02).
+  /** Add a product (qty 1) or increment it when the SAME (id, variant)
+   *  line is already in the cart (SC-02, FV-4). `variant` is the flavor
+   *  name ('' = no variant); each flavor is its own line with its own qty.
    *  Snapshots the product name and effective unit price at add time; the
    *  price is overwritten later by reconcile() with the live catalog price
    *  when it differs (SC-01). `price` is optional — older callers that pass
    *  only (id, name) get price 0, fixed on the next reconcile() pass. */
-  function add(id, name, price) {
+  function add(id, name, price, variant) {
     if (id == null) return;
     id = String(id);
-    var item = findItem(id);
+    var item = findItem(id, variant);
     if (item) {
       item.qty = Math.min(item.qty + 1, MAX_QTY);
     } else {
@@ -150,6 +173,7 @@
         qty: MIN_QTY,
         name: (name == null) ? '' : String(name),
         price: unit,
+        variant: normVariant(variant),
         in_stock: true
       });
     }
@@ -160,12 +184,14 @@
     }
   }
 
-  /** Remove a product line entirely (used by the drawer − control at qty 1). */
-  function remove(id) {
+  /** Remove one (id, variant) line entirely (used by the drawer − control at
+   *  qty 1). Removing one flavor never touches the other flavors' lines. */
+  function remove(id, variant) {
     if (id == null) return;
     id = String(id);
+    var key = itemKey(id, variant);
     for (var i = 0; i < items.length; i++) {
-      if (items[i].id === id) {
+      if (itemKey(items[i].id, items[i].variant) === key) {
         items.splice(i, 1);
         save();
         if (ui) refreshAll();
@@ -174,21 +200,22 @@
     }
   }
 
-  /** Set the quantity of a line. qty < 1 removes the line (decrement at 1);
-   *  setQty(id, 1) on a missing id behaves like add() so the drawer can
-   *  rebuild a line from the id alone (name fixed later by reconcile);
-   *  existing lines are set exactly and capped at MAX_QTY. */
-  function setQty(id, qty) {
+  /** Set the quantity of a (id, variant) line. qty < 1 removes the line
+   *  (decrement at 1); setQty(id, variant, 1) on a missing line behaves like
+   *  add() so the drawer can rebuild it from id + variant alone (name/price
+   *  fixed later by reconcile); existing lines are set exactly and capped at
+   *  MAX_QTY. */
+  function setQty(id, variant, qty) {
     if (id == null) return;
     id = String(id);
     var n = clampQty(qty);
     if (n < MIN_QTY) {
-      remove(id);
+      remove(id, variant);
       return;
     }
-    var item = findItem(id);
+    var item = findItem(id, variant);
     if (!item) {
-      add(id, '');
+      add(id, '', 0, variant);
       return;
     }
     item.qty = n;
