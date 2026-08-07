@@ -40,6 +40,9 @@
   var MAX_VARIANTS = 10;
   var MAX_VARIANT_NAME_LENGTH = 40;
   var MAX_VARIANT_STOCK = 9999;
+  // Monotonic counter so every dynamic row gets a unique label[for]/input[id]
+  // pair even after rows are removed (ids are never reused within a session).
+  var variantRowSeq = 0;
 
   var state = {
     categories: [],
@@ -1348,8 +1351,10 @@
    * Event-driven stock lock: after every row mutation the stock checkbox is
    * locked (disabled) while any variant row exists, with its checked state
    * showing the derived value (any variant with stock > 0). Removing all rows
-   * re-enables the checkbox in the same form session so "remove all → save"
-   * never silently persists a false in_stock.
+   * re-enables the checkbox in the same form session, restoring it to the
+   * product's authoritative in_stock (openProductForm's source) so the lock
+   * never leaves a stale derived value behind — "remove all → save" never
+   * silently persists a false in_stock the user didn't choose.
    */
   function syncStockLock() {
     var checkbox = $('prod-stock');
@@ -1368,6 +1373,8 @@
       if (hint) hint.classList.remove('hidden');
     } else {
       checkbox.disabled = false;
+      var p = editingProductId ? findProduct(editingProductId) : null;
+      checkbox.checked = p ? !!p.in_stock : true;
       if (hint) hint.classList.add('hidden');
     }
   }
@@ -1381,14 +1388,19 @@
   function addVariantRow(name, stock) {
     var container = $('variantesContainer');
 
+    variantRowSeq += 1;
+    var rowSuffix = String(variantRowSeq);
+
     var row = document.createElement('div');
     row.className = 'variant-row';
 
     var nameField = document.createElement('div');
     nameField.className = 'form-field';
     var nameLabel = document.createElement('label');
+    nameLabel.htmlFor = 'variant-name-' + rowSuffix;
     nameLabel.textContent = 'Sabor';
     var nameInput = document.createElement('input');
+    nameInput.id = 'variant-name-' + rowSuffix;
     nameInput.type = 'text';
     nameInput.className = 'variant-name';
     nameInput.maxLength = String(MAX_VARIANT_NAME_LENGTH);
@@ -1401,8 +1413,10 @@
     var stockField = document.createElement('div');
     stockField.className = 'form-field';
     var stockLabel = document.createElement('label');
+    stockLabel.htmlFor = 'variant-stock-' + rowSuffix;
     stockLabel.textContent = 'Stock';
     var stockInput = document.createElement('input');
+    stockInput.id = 'variant-stock-' + rowSuffix;
     stockInput.type = 'number';
     stockInput.className = 'variant-stock';
     stockInput.min = '0';

@@ -905,7 +905,9 @@
 
 #variantesEmpty { margin: 2px 0 10px; }
 
-.btn-ghost:disabled {
+/* Only the "+ Agregar variante" ghost button is ever disabled (at MAX_VARIANTS
+   rows); keep the global btn-ghost style from affecting every panel button. */
+#btnAddVariante:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
