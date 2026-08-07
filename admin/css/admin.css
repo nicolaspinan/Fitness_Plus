@@ -880,6 +880,40 @@
   animation: viewIn 0.2s ease;
 }
 
+/* ---- variant rows (flavor-variants) ----------------------------------------------- */
+
+.variant-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.variant-row {
+  display: grid;
+  grid-template-columns: 1fr 100px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.variant-row .form-field { gap: 6px; }
+
+/* Remove button height-matched to the name/stock inputs. */
+.variant-row .variant-remove {
+  padding: 11px 12px;
+}
+
+#variantesEmpty { margin: 2px 0 10px; }
+
+/* Only the "+ Agregar variante" ghost button is ever disabled (at MAX_VARIANTS
+   rows); keep the global btn-ghost style from affecting every panel button. */
+#btnAddVariante:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.row-meta-variants { color: #6db2ff; }
+
 /* ---- responsive ------------------------------------------------------------------------------------------ */
 
 @media (max-width: 960px) {
@@ -956,6 +990,7 @@
 @media (max-width: 640px) {
   .admin-main { padding: 76px 14px 48px; }
   .form-grid { grid-template-columns: 1fr; }
+  .variant-row { grid-template-columns: 1fr; }
   .admin-row { flex-wrap: wrap; }
   .row-actions { margin-left: auto; gap: 6px; }
   .view-head {
