@@ -253,7 +253,7 @@
     var cls = 'variant-chip' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
     var attrs = 'type="button" class="' + cls + '" data-variant="' + escapeHtml(name) + '"' +
       ' aria-pressed="' + (selected ? 'true' : 'false') + '"' +
-      (disabled ? ' aria-disabled="true"' : '');
+      (disabled ? ' disabled' : '');
     return '<button ' + attrs + '>' + escapeHtml(name) + '</button>';
   }
 
