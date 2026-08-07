@@ -534,6 +534,13 @@
     }
   }
 
+  /** Display label for a line: product name + flavor suffix when present,
+   *  e.g. "CREATINA MYPROTEIN (Naranja)". Rendered via textContent in the
+   *  drawer, so no HTML escaping is needed (XSS-safe). */
+  function lineLabel(it) {
+    return (it.name || it.id) + (it.variant ? ' (' + it.variant + ')' : '');
+  }
+
   /** One line per item. In-stock lines get − qty + controls; lines flagged
    *  "sin stock" by reconcile() are non-interactive (no controls). */
   function renderItems() {
@@ -548,8 +555,9 @@
         var it = items[i];
         var row = el('div', 'cart-item');
         row.setAttribute('data-id', it.id);
+        row.setAttribute('data-variant', it.variant || '');
         var info = el('div', 'cart-item-info');
-        info.appendChild(el('span', 'cart-item-name', it.name || it.id));
+        info.appendChild(el('span', 'cart-item-name', lineLabel(it)));
         if (!it.in_stock) {
           info.appendChild(el('em', 'cart-item-oos', 'Sin stock'));
         } else {
@@ -569,12 +577,14 @@
           var minus = el('button', 'cart-qty-minus', '\u2212');
           minus.type = 'button';
           minus.setAttribute('data-id', it.id);
-          minus.setAttribute('aria-label', 'Quitar una unidad de ' + (it.name || it.id));
+          minus.setAttribute('data-variant', it.variant || '');
+          minus.setAttribute('aria-label', 'Quitar una unidad de ' + lineLabel(it));
           var qty = el('span', 'cart-qty', String(it.qty));
           var plus = el('button', 'cart-qty-plus', '+');
           plus.type = 'button';
           plus.setAttribute('data-id', it.id);
-          plus.setAttribute('aria-label', 'Agregar una unidad de ' + (it.name || it.id));
+          plus.setAttribute('data-variant', it.variant || '');
+          plus.setAttribute('aria-label', 'Agregar una unidad de ' + lineLabel(it));
           ctl.appendChild(minus);
           ctl.appendChild(qty);
           ctl.appendChild(plus);
@@ -634,15 +644,20 @@
     }
     if (!minus && !plus) return;
     e.preventDefault();
-    var id = (minus || plus).getAttribute('data-id');
-    var item = findItem(id);
+    var ctl = minus || plus;
+    var id = ctl.getAttribute('data-id');
+    // Composite identity from the control itself: the ± buttons carry
+    // data-variant alongside data-id (amended design, finding 1), so one
+    // flavor's −/+ never touches the sibling flavor's line.
+    var variant = ctl.getAttribute('data-variant') || '';
+    var item = findItem(id, variant);
     if (plus) {
-      setQty(id, (item ? item.qty : 1) + 1); // capped at 99 by clampQty
-      refocusControl('cart-qty-plus', id);
+      setQty(id, variant, (item ? item.qty : 1) + 1); // capped at 99 by clampQty
+      refocusControl('cart-qty-plus', id, variant);
     } else {
-      setQty(id, (item ? item.qty : 1) - 1); // qty 1 → 0 → remove
-      if (findItem(id)) {
-        refocusControl('cart-qty-minus', id);
+      setQty(id, variant, (item ? item.qty : 1) - 1); // qty 1 → 0 → remove
+      if (findItem(id, variant)) {
+        refocusControl('cart-qty-minus', id, variant);
       } else {
         // Line removed: move focus to the first remaining control or Vaciar.
         var next = ui.controls.length ? ui.controls[0] : ui.vaciar;
@@ -651,11 +666,14 @@
     }
   }
 
-  /** Keep focus on the same ± control after its re-render. */
-  function refocusControl(cls, id) {
+  /** Keep focus on the same ± control after its re-render (matched by
+   *  data-id AND data-variant — an id-only match would refocus the sibling
+   *  flavor's control after one flavor's line is removed). */
+  function refocusControl(cls, id, variant) {
     for (var i = 0; i < ui.controls.length; i++) {
       if (ui.controls[i].className === cls &&
-          ui.controls[i].getAttribute('data-id') === id) {
+          ui.controls[i].getAttribute('data-id') === id &&
+          (ui.controls[i].getAttribute('data-variant') || '') === (variant || '')) {
         ui.controls[i].focus();
         return;
       }
