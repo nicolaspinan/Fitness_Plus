@@ -243,17 +243,24 @@
     return '';
   }
 
-  /** One chip button. 0-stock variants render visible but disabled + struck
-   *  through (SC-2); data-variant and text go through escapeHtml (FV-3 XSS). */
+  /** One chip button. 0-stock variants stay focusable+clicKEABLE for photo
+   *  viewing (FLI-4) — native `disabled` was dropped; they carry
+   *  `aria-disabled="true"` + `.variant-chip--out` instead (NFR-1 a11y).
+   *  data-variant and text go through escapeHtml (FV-3 XSS). `selected` is only
+   *  applied to IN-STOCK variants: on the card an OOS chip must NEVER gain
+   *  `.selected` even after a click (W1 resolution — the delegated handler
+   *  enforces this asymmetry; detail OOS chips DO get `.selected` so the user
+   *  sees which photo they are viewing). */
   function variantChipHtml(v, sel) {
     var name = String(v.name == null ? '' : v.name);
     var stock = Number(v.stock);
-    var selected = stock > 0 && String(sel).trim().toLowerCase() === name.trim().toLowerCase();
-    var disabled = !(stock > 0);
-    var cls = 'variant-chip' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
+    var inStock = stock > 0;
+    var selected = inStock && String(sel).trim().toLowerCase() === name.trim().toLowerCase();
+    var oos = !inStock;
+    var cls = 'variant-chip' + (selected ? ' selected' : '') + (oos ? ' variant-chip--out' : '');
     var attrs = 'type="button" class="' + cls + '" data-variant="' + escapeHtml(name) + '"' +
       ' aria-pressed="' + (selected ? 'true' : 'false') + '"' +
-      (disabled ? ' disabled' : '');
+      (oos ? ' aria-disabled="true"' : '');
     return '<button ' + attrs + '>' + escapeHtml(name) + '</button>';
   }
 
