@@ -929,14 +929,6 @@ section[id],
   color: var(--white);
 }
 
-.variant-chip.disabled {
-  color: var(--light-gray);
-  border-color: var(--border-gray);
-  background: var(--off-white);
-  text-decoration: line-through;
-  cursor: not-allowed;
-}
-
 /* VARIANT CHIP OUT-OF-STOCK (FLI-4) — replaces native `disabled` on 0-stock
    chips so they stay focusable/clickable for photo viewing (NFR-1 a11y).
    pointer-events are intentionally LEFT ENABLED: the user must be able to
@@ -949,13 +941,6 @@ section[id],
   background: var(--off-white);
   opacity: .7;
   position: relative;
-}
-
-.variant-chip--out::after {
-  content: ' · Sin stock';
-  font-size: .6rem;
-  text-transform: lowercase;
-  letter-spacing: 0;
 }
 
 /* ===== PRECIO CON OFERTA ===== */
