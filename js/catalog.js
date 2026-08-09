@@ -431,21 +431,28 @@
     var product = card ? productById(card.getAttribute('data-id')) : detailProduct;
     if (!product) return;
     var name = chip.getAttribute('data-variant');
-    selectedVariantByProduct.set(product, name);
-
     var oos = chip.getAttribute('aria-disabled') === 'true';
 
+    // (PR review, CRITICAL 2) CARD path: an OOS chip click is INERT — the
+    // pre-cutover guard `chip.classList.contains('disabled')` made OOS chips
+    // dead on cards, and retargeting the order controls to a 0-stock flavor
+    // was a regression vs master. Bail BEFORE any mutation: no `.selected`
+    // (W1), no sibling deselection, no href / data-variant retarget. The
+    // detail path keeps the OOS chip selectable for photo viewing (FLI-2).
+    if (card && oos) return;
+
+    selectedVariantByProduct.set(product, name);
+
     // 1. In-place selection state (sibling chips cleared, aria-pressed synced).
-    //    CARD path (W1 resolution): an OOS chip must NOT gain `.selected` — a
-    //    user cannot actually order it, so the misleading "selected" visual is
-    //    suppressed on cards. Detail path keeps `.selected` on OOS chips so
-    //    the customer sees which flavor photo they are viewing (FLI-2 intent).
+    //    Detail OOS chips KEEP `.selected` so the customer sees which flavor
+    //    photo they are viewing (FLI-2 intent); card OOS chips never reach
+    //    this loop (CRITICAL 2 early return above), so the W1 suppression
+    //    term is gone — everything that gets here is selectable.
     var chips = chip.parentNode.querySelectorAll('.variant-chip');
     for (var i = 0; i < chips.length; i++) {
       var isThis = chips[i] === chip;
-      var showSelected = isThis && !(card && oos);
-      chips[i].classList.toggle('selected', showSelected);
-      chips[i].setAttribute('aria-pressed', showSelected ? 'true' : 'false');
+      chips[i].classList.toggle('selected', isThis);
+      chips[i].setAttribute('aria-pressed', isThis ? 'true' : 'false');
     }
 
     // 2. Pedir href recomputed for the selected flavor.
@@ -460,10 +467,23 @@
     // 4. (FLI-4 / SCF-3 / SCF-6) While an OOS chip is the selected chip,
     //    disable BOTH order controls; selecting an in-stock chip re-enables
     //    them. Detail-only — cards have no such controls here.
+    //    PR review (CRITICAL 1): #btnPedirDetalle is an <a> — the `disabled`
+    //    attribute is INERT on anchors, so it is disabled via the .disabled
+    //    class + aria-disabled="true" + href="#" and the delegated btn-pedir
+    //    click guard listener (below) swallows clicks and keyboard Enter
+    //    (Enter dispatches a click on anchors). The cart button is a real
+    //    <button>, so native `disabled` works there.
     if (!card) {
-      if (pedirLink && typeof pedirLink.setAttribute === 'function') {
-        if (oos) pedirLink.setAttribute('disabled', 'disabled');
-        else pedirLink.removeAttribute('disabled');
+      if (pedirLink) {
+        if (oos) {
+          pedirLink.classList.add('disabled');
+          pedirLink.setAttribute('aria-disabled', 'true');
+          pedirLink.setAttribute('href', '#');
+        } else {
+          pedirLink.classList.remove('disabled');
+          pedirLink.removeAttribute('aria-disabled');
+          pedirLink.setAttribute('href', waLink(product, name));
+        }
       }
       if (cartBtn && typeof cartBtn.setAttribute === 'function') {
         if (oos) cartBtn.setAttribute('disabled', 'disabled');
@@ -497,14 +517,33 @@
           img.dataset.mainAlt = img.getAttribute('alt') || '';
         }
         if (variantImg) {
-          img.setAttribute('src', escapeHtml(variantImg));
-          img.setAttribute('alt', escapeHtml(product.name) + ' sabor ' + escapeHtml(variant ? variant.name : ''));
+          // (PR review, WARNING 3) setAttribute does NOT entity-decode, so
+          // escapeHtml would double-encode `&` → `&amp;` and break the URL
+          // (404). setAttribute is XSS-safe by construction (no HTML parsing),
+          // so write the RAW values; the dataset stash below is raw too.
+          img.setAttribute('src', variantImg);
+          img.setAttribute('alt', product.name + ' sabor ' + (variant ? variant.name : ''));
         } else {
           img.setAttribute('src', img.dataset.mainSrc);
           img.setAttribute('alt', img.dataset.mainAlt);
         }
       }
     }
+  });
+
+  // ---- disabled .btn-pedir click guard (PR review, CRITICAL 1) ------------------
+  // #btnPedirDetalle is an <a> — `disabled` is inert on anchors, so an
+  // OOS-selected detail chip disables it via .disabled + aria-disabled + href
+  // "#". This document-level guard swallows clicks AND keyboard Enter (Enter
+  // dispatches a click on anchors), so the disabled Pedir can never navigate.
+  // CSP-safe: delegated listener, no inline handler.
+  document.addEventListener('click', function (e) {
+    // Marker: "btn-pedir-disabled-guard" — the smoke harness locates this
+    // listener by that token (Function#toString keeps this comment).
+    var pedir = e.target.closest('.btn-pedir');
+    if (!pedir || pedir.tagName !== 'A' || pedir.getAttribute('aria-disabled') !== 'true') return;
+    e.preventDefault();
+    e.stopPropagation();
   });
 
   // ---- navbar -------------------------------------------------------------------
