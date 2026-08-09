@@ -1680,6 +1680,17 @@ section[id],
   color: #005fcc;
 }
 
+/* Disabled Agregar (detail page, OOS flavor selected) — same gray as the
+   disabled Pedir button (.btn-pedir.disabled). Cards never render a disabled
+   .btn-cart, so this only affects the detail page. */
+.btn-cart:disabled,
+.btn-cart:disabled:hover {
+  background: var(--border-gray);
+  border-color: var(--border-gray);
+  color: var(--white);
+  cursor: not-allowed;
+}
+
 .detalle-precio-row .btn-cart {
   padding: 11px 27px;
   font-size: 1.1rem;
