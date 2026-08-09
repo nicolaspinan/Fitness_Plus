@@ -243,17 +243,24 @@
     return '';
   }
 
-  /** One chip button. 0-stock variants render visible but disabled + struck
-   *  through (SC-2); data-variant and text go through escapeHtml (FV-3 XSS). */
+  /** One chip button. 0-stock variants stay focusable+clicKEABLE for photo
+   *  viewing (FLI-4) — native `disabled` was dropped; they carry
+   *  `aria-disabled="true"` + `.variant-chip--out` instead (NFR-1 a11y).
+   *  data-variant and text go through escapeHtml (FV-3 XSS). `selected` is only
+   *  applied to IN-STOCK variants: on the card an OOS chip must NEVER gain
+   *  `.selected` even after a click (W1 resolution — the delegated handler
+   *  enforces this asymmetry; detail OOS chips DO get `.selected` so the user
+   *  sees which photo they are viewing). */
   function variantChipHtml(v, sel) {
     var name = String(v.name == null ? '' : v.name);
     var stock = Number(v.stock);
-    var selected = stock > 0 && String(sel).trim().toLowerCase() === name.trim().toLowerCase();
-    var disabled = !(stock > 0);
-    var cls = 'variant-chip' + (selected ? ' selected' : '') + (disabled ? ' disabled' : '');
+    var inStock = stock > 0;
+    var selected = inStock && String(sel).trim().toLowerCase() === name.trim().toLowerCase();
+    var oos = !inStock;
+    var cls = 'variant-chip' + (selected ? ' selected' : '') + (oos ? ' variant-chip--out' : '');
     var attrs = 'type="button" class="' + cls + '" data-variant="' + escapeHtml(name) + '"' +
       ' aria-pressed="' + (selected ? 'true' : 'false') + '"' +
-      (disabled ? ' disabled' : '');
+      (oos ? ' aria-disabled="true"' : '');
     return '<button ' + attrs + '>' + escapeHtml(name) + '</button>';
   }
 
@@ -398,22 +405,54 @@
   // chip click selects the flavor in place (no re-render → focus is kept) and
   // updates the sibling Pedir href + cart data-variant. The card click/keydown
   // guards already ignore .variant-chip, so no navigation happens here (SC-8).
+  // FLI-2 / FLI-4 / FLI-8 (flavor-images): the handler ALSO swaps both detail
+  // slider slide imgs in place on chip click (detail page only) and disables
+  // #btnPedirDetalle + .detalle-info .btn-cart while an OOS chip is selected.
+
+  /** Id-ladder resolver for the detail slide imgs (FLI-2). 4-slide build
+   *  exposes BOTH #slide-producto img + #slide-clone-producto img (clone for
+   *  the infinite-loop illusion); the single-img build (no nutrition table)
+   *  exposes a single #detalleImagen > img. Resolved once per call via
+   *  querySelectorAll on those stable ids. Returns an empty NodeList on
+   *  non-detail pages (cards have no #slide-* / #detalleImagen). */
+  function detailSlideImgs() {
+    var imgs = document.querySelectorAll('#slide-producto img, #slide-clone-producto img');
+    return imgs.length === 2 ? imgs : document.querySelectorAll('#detalleImagen > img');
+  }
+
   document.addEventListener('click', function (e) {
     var chip = e.target.closest('.variant-chip');
-    if (!chip || chip.classList.contains('disabled')) return;
+    // OOS chips are NOT natively disabled anymore (FLI-4) — they carry
+    // aria-disabled="true" so they remain clickable for photo viewing. Only
+    // bail on a non-chip target.
+    if (!chip) return;
     e.stopPropagation();
     var card = chip.closest('.producto-card');
     var product = card ? productById(card.getAttribute('data-id')) : detailProduct;
     if (!product) return;
     var name = chip.getAttribute('data-variant');
+    var oos = chip.getAttribute('aria-disabled') === 'true';
+
+    // (PR review, CRITICAL 2) CARD path: an OOS chip click is INERT — the
+    // pre-cutover guard `chip.classList.contains('disabled')` made OOS chips
+    // dead on cards, and retargeting the order controls to a 0-stock flavor
+    // was a regression vs master. Bail BEFORE any mutation: no `.selected`
+    // (W1), no sibling deselection, no href / data-variant retarget. The
+    // detail path keeps the OOS chip selectable for photo viewing (FLI-2).
+    if (card && oos) return;
+
     selectedVariantByProduct.set(product, name);
 
     // 1. In-place selection state (sibling chips cleared, aria-pressed synced).
+    //    Detail OOS chips KEEP `.selected` so the customer sees which flavor
+    //    photo they are viewing (FLI-2 intent); card OOS chips never reach
+    //    this loop (CRITICAL 2 early return above), so the W1 suppression
+    //    term is gone — everything that gets here is selectable.
     var chips = chip.parentNode.querySelectorAll('.variant-chip');
     for (var i = 0; i < chips.length; i++) {
-      var isSelected = chips[i] === chip;
-      chips[i].classList.toggle('selected', isSelected);
-      chips[i].setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+      var isThis = chips[i] === chip;
+      chips[i].classList.toggle('selected', isThis);
+      chips[i].setAttribute('aria-pressed', isThis ? 'true' : 'false');
     }
 
     // 2. Pedir href recomputed for the selected flavor.
@@ -424,6 +463,87 @@
     //    cart button lives in .detalle-precio-row, outside the selector).
     var cartBtn = card ? card.querySelector('.btn-cart') : document.querySelector('.detalle-info .btn-cart');
     if (cartBtn) cartBtn.setAttribute('data-variant', name);
+
+    // 4. (FLI-4 / SCF-3 / SCF-6) While an OOS chip is the selected chip,
+    //    disable BOTH order controls; selecting an in-stock chip re-enables
+    //    them. Detail-only — cards have no such controls here.
+    //    PR review (CRITICAL 1): #btnPedirDetalle is an <a> — the `disabled`
+    //    attribute is INERT on anchors, so it is disabled via the .disabled
+    //    class + aria-disabled="true" + href="#" and the delegated btn-pedir
+    //    click guard listener (below) swallows clicks and keyboard Enter
+    //    (Enter dispatches a click on anchors). The cart button is a real
+    //    <button>, so native `disabled` works there.
+    if (!card) {
+      if (pedirLink) {
+        if (oos) {
+          pedirLink.classList.add('disabled');
+          pedirLink.setAttribute('aria-disabled', 'true');
+          pedirLink.setAttribute('href', '#');
+        } else {
+          pedirLink.classList.remove('disabled');
+          pedirLink.removeAttribute('aria-disabled');
+          pedirLink.setAttribute('href', waLink(product, name));
+        }
+      }
+      if (cartBtn && typeof cartBtn.setAttribute === 'function') {
+        if (oos) cartBtn.setAttribute('disabled', 'disabled');
+        else cartBtn.removeAttribute('disabled');
+      }
+
+      // 5. (FLI-2 / FLI-5 / FLI-8 / SCF-2 / SCF-8) Silent detail image swap.
+      //    Detail page only — card image NEVER swaps (SCF-7 guard). Resolve the
+      //    variant object by name to read its image_url. Lazy-init
+      //    dataset.mainSrc / dataset.mainAlt from each slide img's CURRENT src
+      //    / alt on FIRST swap (NOT at render time — survives re-renders that
+      //    reset the slider markup). Write src/alt in place via setAttribute;
+      //    NO initSlider re-call, NO DOM rebuild (FLI-8 silent swap).
+      var variant = null;
+      if (Array.isArray(product.variants)) {
+        for (var j = 0; j < product.variants.length; j++) {
+          if (product.variants[j] && String(product.variants[j].name) === name) {
+            variant = product.variants[j];
+            break;
+          }
+        }
+      }
+      var variantImg = variant && variant.image_url ? variant.image_url : '';
+      var slideImgs = detailSlideImgs();
+      // Loop is a real NodeList; iterate by index (ES5 — project style).
+      for (var k = 0; k < slideImgs.length; k++) {
+        var img = slideImgs[k];
+        // Lazy stash the canonical src/alt on first touch.
+        if (!img.dataset.mainSrc) {
+          img.dataset.mainSrc = img.getAttribute('src') || '';
+          img.dataset.mainAlt = img.getAttribute('alt') || '';
+        }
+        if (variantImg) {
+          // (PR review, WARNING 3) setAttribute does NOT entity-decode, so
+          // escapeHtml would double-encode `&` → `&amp;` and break the URL
+          // (404). setAttribute is XSS-safe by construction (no HTML parsing),
+          // so write the RAW values; the dataset stash below is raw too.
+          img.setAttribute('src', variantImg);
+          img.setAttribute('alt', product.name + ' sabor ' + (variant ? variant.name : ''));
+        } else {
+          img.setAttribute('src', img.dataset.mainSrc);
+          img.setAttribute('alt', img.dataset.mainAlt);
+        }
+      }
+    }
+  });
+
+  // ---- disabled .btn-pedir click guard (PR review, CRITICAL 1) ------------------
+  // #btnPedirDetalle is an <a> — `disabled` is inert on anchors, so an
+  // OOS-selected detail chip disables it via .disabled + aria-disabled + href
+  // "#". This document-level guard swallows clicks AND keyboard Enter (Enter
+  // dispatches a click on anchors), so the disabled Pedir can never navigate.
+  // CSP-safe: delegated listener, no inline handler.
+  document.addEventListener('click', function (e) {
+    // Marker: "btn-pedir-disabled-guard" — the smoke harness locates this
+    // listener by that token (Function#toString keeps this comment).
+    var pedir = e.target.closest('.btn-pedir');
+    if (!pedir || pedir.tagName !== 'A' || pedir.getAttribute('aria-disabled') !== 'true') return;
+    e.preventDefault();
+    e.stopPropagation();
   });
 
   // ---- navbar -------------------------------------------------------------------
