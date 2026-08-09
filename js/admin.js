@@ -1380,12 +1380,16 @@
   }
 
   /**
-   * Append one variant row (name + stock + remove). Reuses the form-field /
-   * btn-ghost patterns; inputs are populated via .value only (never innerHTML),
-   * so a stored variant name cannot inject markup. The add button is disabled
-   * at MAX_VARIANTS rows. Runs syncStockLock after every mutation.
+   * Append one variant row (name + stock + optional photo + remove). Reuses
+   * the form-field / btn-ghost patterns; inputs are populated via .value only
+   * (never innerHTML), so a stored variant name cannot inject markup. Each row
+   * carries its uploaded photo URL in row.dataset.variantImageUrl ('' = no
+   * photo) — collectVariantRows harvests it as image_url ('' coerced to null
+   * per FLI-1). imageUrl is the 3rd arg so renderVariantRows can re-populate
+   * an existing product's variant photos. The add button is disabled at
+   * MAX_VARIANTS rows. Runs syncStockLock after every mutation.
    */
-  function addVariantRow(name, stock) {
+  function addVariantRow(name, stock, imageUrl) {
     var container = $('variantesContainer');
 
     variantRowSeq += 1;
@@ -1393,6 +1397,7 @@
 
     var row = document.createElement('div');
     row.className = 'variant-row';
+    row.dataset.variantImageUrl = imageUrl || '';
 
     var nameField = document.createElement('div');
     nameField.className = 'form-field';
@@ -1437,10 +1442,44 @@
     icon.setAttribute('aria-hidden', 'true');
     removeBtn.appendChild(icon);
 
+    // Optional per-variant photo (FLI-7): hidden file input + "Elegir foto"
+    // label + thumbnail preview. Rendered ONLY inside variant rows — a
+    // variant-less product shows no photo control. Wraps to its own grid row
+    // below the name/stock/remove trio (admin.css .variant-photo).
+    var photoField = document.createElement('div');
+    photoField.className = 'form-field variant-photo';
+
+    var photoInput = document.createElement('input');
+    photoInput.type = 'file';
+    photoInput.id = 'variant-photo-' + rowSuffix;
+    photoInput.className = 'file-input';
+    photoInput.accept = 'image/png,image/jpeg,image/webp';
+    photoInput.setAttribute('aria-label', 'Foto de la variante');
+
+    var photoLabel = document.createElement('label');
+    photoLabel.htmlFor = photoInput.id;
+    photoLabel.className = 'btn-ghost btn-small file-label';
+    photoLabel.textContent = 'Elegir foto';
+
+    var photoPreview = document.createElement('img');
+    photoPreview.className = 'variant-photo-preview';
+    photoPreview.alt = '';
+    photoPreview.setAttribute('aria-hidden', 'true');
+
+    photoField.appendChild(photoInput);
+    photoField.appendChild(photoLabel);
+    photoField.appendChild(photoPreview);
+
     row.appendChild(nameField);
     row.appendChild(stockField);
     row.appendChild(removeBtn);
+    row.appendChild(photoField);
     container.appendChild(row);
+
+    // Populate the preview when re-rendering an existing product (imageUrl
+    // non-empty); a null/empty value leaves the hidden placeholder state.
+    setPreview(photoPreview, imageUrl || '');
+    bindVariantUpload(row);
 
     $('variantesEmpty').classList.add('hidden');
     if (container.children.length >= MAX_VARIANTS) {
@@ -1731,6 +1770,60 @@
     // Manual URL edits update the preview too.
     urlInput.addEventListener('input', function () {
       setPreview(preview, urlInput.value.trim());
+    });
+  }
+
+  /**
+   * Bind one variant row's photo input → thumbnail preview + dataset URL
+   * (FLI-7 / SCF-4). Mirrors bindUpload verbatim: 'admin/' + timestamp +
+   * safeFileName path, bucket 'productos', png/jpeg/webp ≤ 2MB, 30s timeout,
+   * FileReader data: preview (never URL.createObjectURL), and delete-on-replace
+   * of the row's PREVIOUS URL via removeStoredObject (best-effort) BEFORE the
+   * new one is stashed. On success the public URL is saved in
+   * row.dataset.variantImageUrl so collectVariantRows can harvest it.
+   */
+  function bindVariantUpload(rowEl) {
+    var fileInput = rowEl.querySelector('.variant-photo input[type="file"]');
+    var preview = rowEl.querySelector('.variant-photo img');
+    if (!fileInput || !preview) return;
+
+    fileInput.addEventListener('change', function () {
+      var file = fileInput.files[0];
+      if (!file) return;
+
+      if (!isValidImage(file)) {
+        showBanner('El archivo debe ser una imagen (PNG/JPG/WEBP) de hasta 2MB.', 'error');
+        fileInput.value = '';
+        return;
+      }
+
+      var reader = new FileReader();
+      reader.onload = function () {
+        preview.src = reader.result;
+        preview.classList.remove('hidden');
+      };
+      reader.onerror = function () { /* preview is best-effort */ };
+      reader.readAsDataURL(file);
+
+      var path = 'admin/' + Date.now() + '-' + safeFileName(file.name);
+      fileInput.setAttribute('disabled', 'disabled');
+      setBusy($('btnSaveProducto'), true, 'Subiendo imagen…');
+      window.Supabase.upload(BUCKET, path, file, { timeout: 30000 }).then(function () {
+        var previousUrl = rowEl.dataset.variantImageUrl || '';
+        rowEl.dataset.variantImageUrl = window.Supabase.publicUrl(BUCKET, path);
+        if (previousUrl) removeStoredObject(previousUrl);
+        showBanner('Imagen subida correctamente.', 'success');
+      }).catch(function (err) {
+        if (isAuthError(err)) { goLogin(); return; }
+        showBanner('No se pudo subir la imagen. Intentá de nuevo.', 'error');
+        // Never leave a preview of a file that was not saved: restore the
+        // preview to whatever the row currently holds.
+        setPreview(preview, rowEl.dataset.variantImageUrl || '');
+      }).then(function () {
+        fileInput.removeAttribute('disabled');
+        fileInput.value = '';
+        setBusy($('btnSaveProducto'), false, 'Guardar producto');
+      });
     });
   }
 

@@ -912,6 +912,28 @@
   cursor: not-allowed;
 }
 
+/* Per-variant photo (flavor-images): "Elegir foto" + thumbnail. It is the 4th
+   form-field of the row, so it wraps to its own full-width grid row under the
+   name/stock/remove trio (row grid stays 1fr 100px auto — no layout shift). */
+.variant-row .variant-photo {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.variant-row .variant-photo img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.variant-row .variant-photo .file-label {
+  display: inline-flex;
+}
+
 .row-meta-variants { color: #6db2ff; }
 
 /* ---- responsive ------------------------------------------------------------------------------------------ */
