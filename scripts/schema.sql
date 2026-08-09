@@ -53,7 +53,7 @@ create table products (
   is_featured boolean not null default false,
   sort_order int not null default 0,
   home_order int,
-  -- NULL or [] = no variants (current behavior); shape [{name, stock}]
+  -- NULL or [] = no variants (current behavior); shape [{name, stock, image_url?}]
   variants jsonb
 );
 
