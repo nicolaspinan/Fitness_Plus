@@ -405,9 +405,27 @@
   // chip click selects the flavor in place (no re-render → focus is kept) and
   // updates the sibling Pedir href + cart data-variant. The card click/keydown
   // guards already ignore .variant-chip, so no navigation happens here (SC-8).
+  // FLI-2 / FLI-4 / FLI-8 (flavor-images): the handler ALSO swaps both detail
+  // slider slide imgs in place on chip click (detail page only) and disables
+  // #btnPedirDetalle + .detalle-info .btn-cart while an OOS chip is selected.
+
+  /** Id-ladder resolver for the detail slide imgs (FLI-2). 4-slide build
+   *  exposes BOTH #slide-producto img + #slide-clone-producto img (clone for
+   *  the infinite-loop illusion); the single-img build (no nutrition table)
+   *  exposes a single #detalleImagen > img. Resolved once per call via
+   *  querySelectorAll on those stable ids. Returns an empty NodeList on
+   *  non-detail pages (cards have no #slide-* / #detalleImagen). */
+  function detailSlideImgs() {
+    var imgs = document.querySelectorAll('#slide-producto img, #slide-clone-producto img');
+    return imgs.length === 2 ? imgs : document.querySelectorAll('#detalleImagen > img');
+  }
+
   document.addEventListener('click', function (e) {
     var chip = e.target.closest('.variant-chip');
-    if (!chip || chip.classList.contains('disabled')) return;
+    // OOS chips are NOT natively disabled anymore (FLI-4) — they carry
+    // aria-disabled="true" so they remain clickable for photo viewing. Only
+    // bail on a non-chip target.
+    if (!chip) return;
     e.stopPropagation();
     var card = chip.closest('.producto-card');
     var product = card ? productById(card.getAttribute('data-id')) : detailProduct;
@@ -415,12 +433,19 @@
     var name = chip.getAttribute('data-variant');
     selectedVariantByProduct.set(product, name);
 
+    var oos = chip.getAttribute('aria-disabled') === 'true';
+
     // 1. In-place selection state (sibling chips cleared, aria-pressed synced).
+    //    CARD path (W1 resolution): an OOS chip must NOT gain `.selected` — a
+    //    user cannot actually order it, so the misleading "selected" visual is
+    //    suppressed on cards. Detail path keeps `.selected` on OOS chips so
+    //    the customer sees which flavor photo they are viewing (FLI-2 intent).
     var chips = chip.parentNode.querySelectorAll('.variant-chip');
     for (var i = 0; i < chips.length; i++) {
-      var isSelected = chips[i] === chip;
-      chips[i].classList.toggle('selected', isSelected);
-      chips[i].setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+      var isThis = chips[i] === chip;
+      var showSelected = isThis && !(card && oos);
+      chips[i].classList.toggle('selected', showSelected);
+      chips[i].setAttribute('aria-pressed', showSelected ? 'true' : 'false');
     }
 
     // 2. Pedir href recomputed for the selected flavor.
@@ -431,6 +456,55 @@
     //    cart button lives in .detalle-precio-row, outside the selector).
     var cartBtn = card ? card.querySelector('.btn-cart') : document.querySelector('.detalle-info .btn-cart');
     if (cartBtn) cartBtn.setAttribute('data-variant', name);
+
+    // 4. (FLI-4 / SCF-3 / SCF-6) While an OOS chip is the selected chip,
+    //    disable BOTH order controls; selecting an in-stock chip re-enables
+    //    them. Detail-only — cards have no such controls here.
+    if (!card) {
+      if (pedirLink && typeof pedirLink.setAttribute === 'function') {
+        if (oos) pedirLink.setAttribute('disabled', 'disabled');
+        else pedirLink.removeAttribute('disabled');
+      }
+      if (cartBtn && typeof cartBtn.setAttribute === 'function') {
+        if (oos) cartBtn.setAttribute('disabled', 'disabled');
+        else cartBtn.removeAttribute('disabled');
+      }
+
+      // 5. (FLI-2 / FLI-5 / FLI-8 / SCF-2 / SCF-8) Silent detail image swap.
+      //    Detail page only — card image NEVER swaps (SCF-7 guard). Resolve the
+      //    variant object by name to read its image_url. Lazy-init
+      //    dataset.mainSrc / dataset.mainAlt from each slide img's CURRENT src
+      //    / alt on FIRST swap (NOT at render time — survives re-renders that
+      //    reset the slider markup). Write src/alt in place via setAttribute;
+      //    NO initSlider re-call, NO DOM rebuild (FLI-8 silent swap).
+      var variant = null;
+      if (Array.isArray(product.variants)) {
+        for (var j = 0; j < product.variants.length; j++) {
+          if (product.variants[j] && String(product.variants[j].name) === name) {
+            variant = product.variants[j];
+            break;
+          }
+        }
+      }
+      var variantImg = variant && variant.image_url ? variant.image_url : '';
+      var slideImgs = detailSlideImgs();
+      // Loop is a real NodeList; iterate by index (ES5 — project style).
+      for (var k = 0; k < slideImgs.length; k++) {
+        var img = slideImgs[k];
+        // Lazy stash the canonical src/alt on first touch.
+        if (!img.dataset.mainSrc) {
+          img.dataset.mainSrc = img.getAttribute('src') || '';
+          img.dataset.mainAlt = img.getAttribute('alt') || '';
+        }
+        if (variantImg) {
+          img.setAttribute('src', escapeHtml(variantImg));
+          img.setAttribute('alt', escapeHtml(product.name) + ' sabor ' + escapeHtml(variant ? variant.name : ''));
+        } else {
+          img.setAttribute('src', img.dataset.mainSrc);
+          img.setAttribute('alt', img.dataset.mainAlt);
+        }
+      }
+    }
   });
 
   // ---- navbar -------------------------------------------------------------------
