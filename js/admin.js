@@ -1044,6 +1044,17 @@
         window.Supabase.remove('products', id).then(function () {
           removeStoredObject(p.image_url);
           removeStoredObject(p.nutrition_image_url);
+          // Per-variant orphan cleanup (FLI-6 / SCF-5): each variant photo is
+          // removed best-effort IN ADDITION to the main + nutrition images.
+          // The loop is not awaited — delete completes regardless of any
+          // storage failure (removeStoredObject swallows errors).
+          if (Array.isArray(p.variants)) {
+            for (var vi = 0; vi < p.variants.length; vi++) {
+              if (p.variants[vi] && p.variants[vi].image_url) {
+                removeStoredObject(p.variants[vi].image_url);
+              }
+            }
+          }
           showBanner('Producto eliminado.', 'success');
           renderProducts();
         }).catch(function (err) {
@@ -1496,23 +1507,29 @@
     syncStockLock();
   }
 
-  /** Populate the rows from a product's saved variants (null/[] → no rows). */
+  /** Populate the rows from a product's saved variants (null/[] → no rows).
+   *  Each variant's image_url (if any) feeds the row's photo preview. */
   function renderVariantRows(variants) {
     clearVariantRows();
     if (Array.isArray(variants)) {
       for (var i = 0; i < variants.length; i++) {
         var v = variants[i] || {};
-        addVariantRow(v.name, v.stock);
+        addVariantRow(v.name, v.stock, v.image_url);
       }
     }
   }
 
-  /** Row removal (delegated on the container — CSP-safe, no inline handlers). */
+  /** Row removal (delegated on the container — CSP-safe, no inline handlers).
+   *  Best-effort orphan cleanup: an uploaded variant photo is removed from
+   *  storage BEFORE the row leaves the DOM (FLI-6 / SCF-4) — remove never
+   *  blocks on a storage failure (removeStoredObject swallows errors). */
   function handleVariantesClick(e) {
     var btn = e.target && e.target.closest ? e.target.closest('.variant-remove') : null;
     if (!btn) return;
     var row = btn.closest('.variant-row');
     if (!row || !row.parentNode) return;
+    var rowImageUrl = row.dataset.variantImageUrl || '';
+    if (rowImageUrl) removeStoredObject(rowImageUrl);
     row.parentNode.removeChild(row);
     if ($('variantesContainer').querySelectorAll('.variant-row').length === 0) {
       $('variantesEmpty').classList.remove('hidden');
@@ -1547,7 +1564,10 @@
    * Read the variant rows into a payload-ready array, validating per FV-1:
    * trimmed non-empty name ≤ 40 chars, unique case-insensitively, ≤ 10 rows,
    * integer stock 0..9999. Fully-empty rows are skipped; a name-only row gets
-   * stock 0. Returns {rows} or {error} in the existing Spanish error style.
+   * stock 0. Each harvested row also carries image_url (FLI-1): the uploaded
+   * public URL when the row has one, null when empty/missing — legacy rows
+   * without the dataset key harvest as null. Returns {rows} or {error} in the
+   * existing Spanish error style.
    */
   function collectVariantRows() {
     var rows = [];
@@ -1580,7 +1600,8 @@
         return { error: 'El stock de "' + name + '" debe ser un número entero entre 0 y ' + MAX_VARIANT_STOCK + '.' };
       }
 
-      rows.push({ name: name, stock: stock });
+      var rowUrl = rowEls[i].dataset.variantImageUrl || '';
+      rows.push({ name: name, stock: stock, image_url: rowUrl || null });
     }
 
     return { rows: rows };
