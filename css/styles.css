@@ -711,7 +711,13 @@ section[id],
   align-items: center;
   justify-content: space-between;
   gap: 20px;
+  flex-wrap: wrap;
+  row-gap: 16px;
   margin-bottom: 40px;
+}
+
+.detalle-precio-row .btn-group {
+  margin-left: auto;
 }
 
 .detalle-precio-row .btn-pedir {
