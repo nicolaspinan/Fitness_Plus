@@ -120,6 +120,13 @@ body {
   to   { opacity: 1; }
 }
 
+/* Guard against transient horizontal overflow (view-transition snapshots,
+   pinch-zoom state) leaving the document scrolled sideways on mobile. */
+html,
+body {
+  overflow-x: clip;
+}
+
 a {
   text-decoration: none;
   color: inherit;
@@ -144,9 +151,25 @@ section[id],
 }
 
 /* Cross-fade between pages (Chrome/Edge 126+, Safari 18+, Android).
-   Browsers without View Transitions ignore this and navigate normally. */
-@view-transition {
-  navigation: auto;
+   Desktop only: the opt-in is gated to fine-pointer/hover devices so real
+   touch devices NEVER opt in — on phones/tablets the captured snapshot of
+   the previous page stays visible through the transparent entering page
+   while the product detail renders asynchronously (skeleton + Supabase
+   fetch + lazy images), producing layout artifacts (residue at the top,
+   container shifted right with the left edge cut off, overlapping text at
+   the end of the page). Gating the opt-in (instead of a media-scoped
+   navigation: none) also degrades safely in engines that drop nested
+   @view-transition rules: they simply have no transitions. */
+@media (hover: hover) and (pointer: fine) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
 }
 
 /* ===== NAVBAR ===== */

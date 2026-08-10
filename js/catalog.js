@@ -975,14 +975,55 @@
     }
     updateProductoMeta(p);
     injectProductJsonLd(p);
-    requestAnimationFrame(function () {
+    scrollToProductWhenSettled();
+  }
+
+  /** Scrolls the product detail into view once layout has settled.
+   *  Fonts can change the layout before first paint; wait for them, then
+   *  scroll. A second pass after images/timeout corrects any residual
+   *  movement, unless the user already started scrolling. */
+  function scrollToProductWhenSettled() {
+    var userInteracted = false;
+    function markInteract() { userInteracted = true; }
+    window.addEventListener('wheel', markInteract, { passive: true });
+    window.addEventListener('touchstart', markInteract, { passive: true });
+    window.addEventListener('touchmove', markInteract, { passive: true });
+    var fontsReady = document.fonts && document.fonts.ready
+      ? document.fonts.ready
+      : Promise.resolve();
+    fontsReady.then(function () {
+      requestAnimationFrame(scrollToProduct);
       var detalleEl = document.getElementById('productoDetalle');
-      if (detalleEl) {
-        var top = detalleEl.getBoundingClientRect().top + window.scrollY;
-        var offset = window.innerWidth > 768 ? 80 : 30;
-        window.scrollTo({ top: top - offset, behavior: 'smooth' });
+      var imgs = detalleEl ? detalleEl.querySelectorAll('img') : [];
+      var pending = [];
+      for (var i = 0; i < imgs.length; i++) {
+        pending.push(new Promise(function (resolve) {
+          if (imgs[i].complete) { resolve(); return; }
+          imgs[i].addEventListener('load', resolve, { once: true });
+          imgs[i].addEventListener('error', resolve, { once: true });
+        }));
       }
+      var settled = pending.length
+        ? Promise.race([
+            Promise.all(pending),
+            new Promise(function (resolve) { setTimeout(resolve, 1500); })
+          ])
+        : Promise.resolve();
+      settled.then(function () {
+        window.removeEventListener('wheel', markInteract);
+        window.removeEventListener('touchstart', markInteract);
+        window.removeEventListener('touchmove', markInteract);
+        if (!userInteracted) requestAnimationFrame(scrollToProduct);
+      });
     });
+  }
+
+  function scrollToProduct() {
+    var detalleEl = document.getElementById('productoDetalle');
+    if (!detalleEl) return;
+    var top = detalleEl.getBoundingClientRect().top + window.scrollY;
+    var offset = window.innerWidth > 768 ? 80 : 30;
+    window.scrollTo({ top: top - offset, behavior: 'smooth' });
   }
 
   function renderProducto() {
