@@ -600,6 +600,15 @@ section[id],
   border: 1px solid var(--border-gray);
 }
 
+/* Single-image detail build (products without nutrition table): render at the
+   photo's real aspect ratio, capped like the slider slides — never stretched. */
+.detalle-imagen > img {
+  width: 100%;
+  height: auto;
+  max-height: 460px;
+  object-fit: contain;
+}
+
 .detalle-slider {
   position: relative;
   overflow: hidden;
