@@ -8,7 +8,7 @@
     mirroring the public pages. All other directives stay locked down:
     no inline scripts, no inline styles, form-action 'none'.
   -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://vuckfanivmkhmczzvssw.supabase.co; script-src 'self'; connect-src https://vuckfanivmkhmczzvssw.supabase.co; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data: https://vuckfanivmkhmczzvssw.supabase.co; script-src 'self'; connect-src https://vuckfanivmkhmczzvssw.supabase.co; base-uri 'self'; form-action 'none'; frame-ancestors 'none'">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex, nofollow">
@@ -16,11 +16,11 @@
   <title>Panel de Administración | Fitness Plus</title>
   <link rel="icon" type="image/png" href="../logo/favicon_1.png">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/fonts.css?v=1">
+  <link rel="preload" href="../fonts/bebas-neue-400.woff2?v=1" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="../fonts/montserrat-var.woff2?v=1" as="font" type="font/woff2" crossorigin>
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" integrity="sha256-yIDrPSXHZdOZhAqiBP7CKzIwMQmRCJ8UeB8Jo17YC4o=" crossorigin="anonymous">
+  <link rel="stylesheet" href="../css/fontawesome-subset.css?v=1">
 
   <link rel="stylesheet" href="../css/styles.css">
   <link rel="stylesheet" href="css/admin.css">
@@ -311,7 +311,7 @@
   <section id="view-login" class="admin-view view-login hidden" aria-labelledby="loginTitle">
     <div class="login-card">
       <div class="login-brand">
-        <img src="../img/logo.png" alt="Fitness Plus" class="login-logo">
+        <img src="../img/logo.png" alt="Fitness Plus" width="179" height="130" class="login-logo">
         <h1 id="loginTitle" class="login-title">Fitness Plus <span>Admin</span></h1>
       </div>
       <form id="loginForm" novalidate>
@@ -341,8 +341,8 @@
     </div>
   </div>
 
-  <script src="../js/site-config.js"></script>
-  <script src="../js/supabase.js"></script>
-  <script src="../js/admin.js"></script>
+  <script src="../js/site-config.js" defer></script>
+  <script src="../js/supabase.js" defer></script>
+  <script src="../js/admin.js" defer></script>
 </body>
 </html>

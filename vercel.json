@@ -21,11 +21,29 @@
       ]
     },
     {
+      "source": "/fonts/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/img/hero/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/img/logo.png",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
       "source": "/admin/(.*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'none'; style-src 'self' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https://vuckfanivmkhmczzvssw.supabase.co; script-src 'self'; connect-src https://vuckfanivmkhmczzvssw.supabase.co; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+          "value": "default-src 'none'; style-src 'self'; font-src 'self'; img-src 'self' data: https://vuckfanivmkhmczzvssw.supabase.co; script-src 'self'; connect-src https://vuckfanivmkhmczzvssw.supabase.co; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
         }
       ]
     }

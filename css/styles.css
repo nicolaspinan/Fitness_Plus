@@ -404,7 +404,7 @@ section[id],
   background-image:
     radial-gradient(ellipse at 25% 30%, rgba(59, 130, 246, 0.18), transparent 55%),
     linear-gradient(180deg, rgba(10, 10, 10, 0.2) 0%, rgba(10, 10, 10, 0.85) 100%),
-    url('../img/hero/principal_hero.png');
+    url('../img/hero/principal_hero.webp');
   background-position: center;
   background-size: cover;
 }
@@ -530,14 +530,14 @@ section[id],
 #hero-creatinas {
   background:
     linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 100%),
-    url('../img/hero/creatinas_hero.png') center / cover no-repeat;
+    url('../img/hero/creatinas_hero.webp') center / cover no-repeat;
   background-position: center 80%;
 }
 
 #hero-preentrenos {
   background:
     linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 100%),
-    url('../img/hero/prework_hero.png') center / cover no-repeat;
+    url('../img/hero/prework_hero.webp') center / cover no-repeat;
   background-position: center 80%;
 }
 
@@ -570,7 +570,7 @@ section[id],
 #hero-producto {
   background:
     linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 100%),
-    url('../img/hero/principal_hero.png') center / cover no-repeat;
+    url('../img/hero/principal_hero.webp') center / cover no-repeat;
   background-position: center 80%;
 }
 
@@ -1020,7 +1020,7 @@ section[id],
   content: '';
   position: absolute;
   inset: -10px;
-  background: url('../img/hero/principal_hero.png') center / cover no-repeat fixed;
+  background: url('../img/hero/principal_hero.webp') center / cover no-repeat;
   filter: blur(3px);
   z-index: 0;
 }

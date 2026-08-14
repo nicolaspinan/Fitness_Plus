@@ -32,8 +32,8 @@
   // Category slug → local hero background image. Mirrors the pre-cutover CSS
   // ids #hero-creatinas / #hero-preentrenos; unknown slugs get the default.
   var HERO_IMAGES = {
-    creatinas: 'img/hero/creatinas_hero.png',
-    preentrenos: 'img/hero/prework_hero.png'
+    creatinas: 'img/hero/creatinas_hero.webp',
+    preentrenos: 'img/hero/prework_hero.webp'
   };
 
   // Fallback texts when a site_texts key is missing (spec: fallback defaults).
@@ -672,7 +672,7 @@
   function setCategoriaHero(slug, imageUrl) {
     var hero = document.getElementById('hero-categoria');
     if (!hero) return;
-    var fallback = HERO_IMAGES[slug] || 'img/hero/principal_hero.png';
+    var fallback = HERO_IMAGES[slug] || 'img/hero/principal_hero.webp';
     var img = imageUrl || fallback;
     // Escape both quote classes before embedding the URL into a CSS url("...")
     // string. Halts any breakout from the url() token without touching HTML.
