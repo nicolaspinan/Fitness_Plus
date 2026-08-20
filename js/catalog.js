@@ -682,6 +682,19 @@
     hero.style.backgroundPosition = 'center 80%';
   }
 
+  function setProductoHeroFromCategory(category) {
+    var hero = document.getElementById('hero-producto');
+    if (!hero || !category) return;
+    var slug = category.slug || '';
+    var fallback = HERO_IMAGES[slug] || 'img/hero/principal_hero.webp';
+    var img = category.hero_image_url || fallback;
+    var esc = String(img).replace(/"/g, '%22').replace(/'/g, '%27');
+    hero.style.setProperty('background-image',
+      'linear-gradient(135deg, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.6) 100%), url("' + esc + '")');
+    hero.style.backgroundSize = 'cover';
+    hero.style.backgroundPosition = 'center 80%';
+  }
+
   function renderCategoria() {
     var slug = currentSlug;
     var category = null;
@@ -966,6 +979,10 @@
     detailProduct = p; // used by the chip delegation to resolve the product
     var nombre = document.getElementById('productoNombre');
     if (nombre) nombre.textContent = p.name;
+    // Inherit the hero background image from the product's category
+    if (p.category_id && typeof p.category_id === 'object') {
+      setProductoHeroFromCategory(p.category_id);
+    }
     var detalle = document.getElementById('productoDetalle');
     if (detalle) {
       detalle.innerHTML = buildDetailMarkup(p);
@@ -1035,7 +1052,7 @@
     renderSkeleton();
     window.Supabase.select('products', {
       filters: { id: uuid },
-      select: '*,category_id(id,name,slug)'
+      select: '*,category_id(id,name,slug,hero_title,hero_subtitle,hero_image_url)'
     }).then(function (rows) {
       if (!rows || !rows.length) {
         renderNotFound();
