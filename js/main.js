@@ -179,6 +179,46 @@
     const sections = document.querySelectorAll('section[id]');
     const scrollLinks = document.querySelectorAll('a.nav-link[href^="#"]');
 
+    // Smooth-scroll to anchor targets, placing the section title right below the navbar.
+    function scrollToSection(targetId) {
+      var target = document.getElementById(targetId);
+      if (!target) return;
+      var navbarH = navbar ? navbar.offsetHeight : 74;
+      // Find the first heading inside the section to place it right below the navbar.
+      var heading = target.querySelector('h2, h3');
+      var scrollTarget = heading || target;
+      var top = scrollTarget.getBoundingClientRect().top + window.scrollY - navbarH - 8;
+      window.scrollTo({ top: top, behavior: 'smooth' });
+    }
+
+    // "Ver productos" hero button
+    var heroBtn = document.querySelector('a.btn-primary[href="#productos"]');
+    if (heroBtn) {
+      heroBtn.addEventListener('click', function (e) {
+        e.preventDefault();
+        scrollToSection('productos');
+      });
+    }
+
+    // "Nosotros" nav link
+    var nosotrosLink = document.querySelector('a.nav-link[href="#nosotros"]');
+    if (nosotrosLink) {
+      nosotrosLink.addEventListener('click', function (e) {
+        e.preventDefault();
+        scrollToSection('nosotros');
+      });
+    }
+
+    // Handle cross-page anchor navigation (e.g. from categoria.html#index.html#nosotros)
+    if (window.location.hash) {
+      var hashId = window.location.hash.substring(1);
+      var hashTarget = document.getElementById(hashId);
+      if (hashTarget) {
+        // Small delay to let the page render before scrolling
+        setTimeout(function () { scrollToSection(hashId); }, 50);
+      }
+    }
+
     function updateActiveLink() {
       let current = '';
       sections.forEach(section => {

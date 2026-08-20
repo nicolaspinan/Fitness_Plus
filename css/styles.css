@@ -147,7 +147,7 @@ img {
 /* Keep anchor targets visible below the fixed navbar. */
 section[id],
 [id="main"] {
-  scroll-margin-top: 140px;
+  scroll-margin-top: 74px;
 }
 
 /* Cross-fade between pages (Chrome/Edge 126+, Safari 18+, Android).
