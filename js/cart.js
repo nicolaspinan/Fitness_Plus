@@ -102,13 +102,13 @@
   // Flavor-variant stock helpers — duplicated from catalog.js verbatim
   // (same rationale as formatPrice: cart.js is standalone ES5, no imports).
   // A product with a non-empty variants array derives its stock from the
-  // variants (any stock > 0); a variant-less product keeps today's manual
+  // variants (any in_stock); a variant-less product keeps today's manual
   // in_stock flag (FV-2).
 
   function effectiveInStock(p) {
     var v = p && p.variants;
     if (Array.isArray(v) && v.length) {
-      for (var i = 0; i < v.length; i++) if (Number(v[i].stock) > 0) return true;
+      for (var i = 0; i < v.length; i++) if (v[i].in_stock) return true;
       return false;
     }
     return !!(p && p.in_stock);
@@ -290,7 +290,7 @@
     return header + '\n' + lines.join('\n') + '\nTotal: $' + formatPrice(total);
   }
 
-  /** Variant lookup map { lowerName: { name: canonical, stock: int } } for a
+  /** Variant lookup map { lowerName: { name: canonical, in_stock: bool } } for a
    *  product, or {} when it has no variants. Keyed by lowercase so reconcile
    *  can find a line's flavor regardless of stored casing; the canonical
    *  `name` refreshes the line to admin casing afterwards (the cart key
@@ -302,7 +302,7 @@
       var v = p.variants[i];
       var nm = String(v.name == null ? '' : v.name).trim();
       if (!nm) continue;
-      map[nm.toLowerCase()] = { name: nm, stock: Math.floor(Number(v.stock)) || 0 };
+      map[nm.toLowerCase()] = { name: nm, in_stock: !!v.in_stock };
     }
     return map;
   }
@@ -314,8 +314,8 @@
    *  loaded. The catalog product shape is { id, name, price, offer_price,
    *  in_stock, variants, ... }; the effective price is offer_price when set
    *  (not null), otherwise price. Flavor-aware (FV-4, SC-5): a flavored line
-   *  is in stock iff its variant exists with stock > 0 (missing/renamed/
-   *  0-stock flavor, or a variant line on a variant-less product → "sin
+   *  is in stock iff its variant exists and is in_stock (missing/renamed/
+   *  out-of-stock flavor, or a variant line on a variant-less product → "sin
    *  stock"); a legacy ''-variant line on a product that now HAS variants is
    *  an ambiguous unflavored order → flagged "sin stock" too and excluded
    *  from the message. Lines whose id is no longer in the catalog keep their
@@ -345,11 +345,11 @@
         }
         var inStock;
         if (items[j].variant) {
-          // Flavored line: in stock iff the variant exists with stock > 0.
-          // A missing/renamed/0-stock flavor — or any flavor on a product
+          // Flavored line: in stock iff the variant exists and is in_stock.
+          // A missing/renamed/out-of-stock flavor — or any flavor on a product
           // that has no variants — flags the line out of stock (FV-4).
           var vinfo = info.variants[items[j].variant.toLowerCase()];
-          if (vinfo && vinfo.stock > 0) {
+          if (vinfo && vinfo.in_stock) {
             inStock = true;
             if (items[j].variant !== vinfo.name) {
               items[j].variant = vinfo.name; // refresh canonical casing

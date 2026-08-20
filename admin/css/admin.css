@@ -891,14 +891,14 @@
 
 .variant-row {
   display: grid;
-  grid-template-columns: 1fr 100px auto;
+  grid-template-columns: 1fr 80px auto;
   gap: 12px;
   align-items: end;
 }
 
 .variant-row .form-field { gap: 6px; }
 
-/* Remove button height-matched to the name/stock inputs. */
+/* Remove button height-matched to the name/available inputs. */
 .variant-row .variant-remove {
   padding: 11px 12px;
 }
@@ -914,7 +914,7 @@
 
 /* Per-variant photo (flavor-images): "Elegir foto" + thumbnail. It is the 4th
    form-field of the row, so it wraps to its own full-width grid row under the
-   name/stock/remove trio (row grid stays 1fr 100px auto — no layout shift). */
+   name/available/remove trio (row grid stays 1fr 80px auto — no layout shift). */
 .variant-row .variant-photo {
   grid-column: 1 / -1;
   display: flex;

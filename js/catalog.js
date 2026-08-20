@@ -97,26 +97,26 @@
 
   // ---- flavor variants: derived stock -----------------------------------------
   // A product with a non-empty variants array derives its stock from the
-  // variants (any stock > 0); a variant-less product keeps today's manual
+  // variants (any in_stock); a variant-less product keeps today's manual
   // in_stock flag. NULL/[] variants = byte-identical current behavior (FV-1).
 
   function effectiveInStock(p) {
     var v = p && p.variants;
     if (Array.isArray(v) && v.length) {
-      for (var i = 0; i < v.length; i++) if (Number(v[i].stock) > 0) return true;
+      for (var i = 0; i < v.length; i++) if (v[i].in_stock) return true;
       return false;
     }
     return !!(p && p.in_stock);
   }
 
-  /** Stock of the named variant (trim + case-insensitive match) or null when
-   *  the product has no such variant. */
-  function variantStock(p, name) {
+  /** Whether the named variant is in stock (trim + case-insensitive match)
+   *  or null when the product has no such variant. */
+  function variantInStock(p, name) {
     var v = p && p.variants;
     if (!Array.isArray(v)) return null;
     var target = String(name).trim().toLowerCase();
     for (var i = 0; i < v.length; i++) {
-      if (String(v[i].name).trim().toLowerCase() === target) return Number(v[i].stock);
+      if (String(v[i].name).trim().toLowerCase() === target) return !!v[i].in_stock;
     }
     return null;
   }
@@ -221,21 +221,21 @@
   var selectedVariantByProduct = new WeakMap();
   var detailProduct = null;
 
-  /** Stored selection when that variant still has stock, else first in-stock
+  /** Stored selection when that variant is still in stock, else first in-stock
    *  variant (array order). */
   function getSelectedVariant(p) {
     var stored = selectedVariantByProduct.get(p);
-    if (stored && variantStock(p, stored) > 0) return stored;
+    if (stored && variantInStock(p, stored)) return stored;
     var v = p && p.variants;
     if (Array.isArray(v)) {
       for (var i = 0; i < v.length; i++) {
-        if (Number(v[i].stock) > 0) return v[i].name;
+        if (v[i].in_stock) return v[i].name;
       }
     }
     return '';
   }
 
-  /** One chip button. 0-stock variants stay focusable+clickable for photo
+  /** One chip button. Out-of-stock variants stay focusable+clickable for photo
    *  viewing (FLI-4) — native `disabled` was dropped; they carry
    *  `aria-disabled="true"` + `.variant-chip--out` instead (NFR-1 a11y).
    *  data-variant and text go through escapeHtml (FV-3 XSS). Chips render
@@ -244,8 +244,7 @@
    *  sees which flavor photo they are viewing (FLI-2/FLI-4). */
   function variantChipHtml(v, sel) {
     var name = String(v.name == null ? '' : v.name);
-    var stock = Number(v.stock);
-    var inStock = stock > 0;
+    var inStock = !!v.in_stock;
     var selected = inStock && String(sel).trim().toLowerCase() === name.trim().toLowerCase();
     var oos = !inStock;
     var cls = 'variant-chip' + (selected ? ' selected' : '') + (oos ? ' variant-chip--out' : '');

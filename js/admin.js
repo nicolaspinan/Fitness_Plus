@@ -39,7 +39,7 @@
   var VALID_VIEWS = ['login', 'categorias', 'productos', 'textos'];
   var MAX_VARIANTS = 10;
   var MAX_VARIANT_NAME_LENGTH = 40;
-  var MAX_VARIANT_STOCK = 9999;
+
   // Monotonic counter so every dynamic row gets a unique label[for]/input[id]
   // pair even after rows are removed (ids are never reused within a session).
   var variantRowSeq = 0;
@@ -1361,7 +1361,7 @@
   /**
    * Event-driven stock lock: after every row mutation the stock checkbox is
    * locked (disabled) while any variant row exists, with its checked state
-   * showing the derived value (any variant with stock > 0). Removing all rows
+   * showing the derived value (any variant in_stock). Removing all rows
    * re-enables the checkbox in the same form session, restoring it to the
    * product's authoritative in_stock (openProductForm's source) so the lock
    * never leaves a stale derived value behind — "remove all → save" never
@@ -1375,9 +1375,8 @@
     if (rowEls.length > 0) {
       var anyStock = false;
       for (var i = 0; i < rowEls.length; i++) {
-        var stockInput = rowEls[i].querySelector('.variant-stock');
-        var raw = stockInput ? stockInput.value.trim() : '';
-        if (raw !== '' && Number(raw) > 0) { anyStock = true; break; }
+        var cb = rowEls[i].querySelector('.variant-stock');
+        if (cb && cb.checked) { anyStock = true; break; }
       }
       checkbox.disabled = true;
       checkbox.checked = anyStock;
@@ -1391,8 +1390,8 @@
   }
 
   /**
-   * Append one variant row (name + stock + optional photo + remove). Reuses
-   * the form-field / btn-ghost patterns; inputs are populated via .value only
+   * Append one variant row (name + in_stock checkbox + optional photo + remove). Reuses
+   * the form-field / btn-ghost patterns; inputs are populated via .value/.checked only
    * (never innerHTML), so a stored variant name cannot inject markup. Each row
    * carries its uploaded photo URL in row.dataset.variantImageUrl ('' = no
    * photo) — collectVariantRows harvests it as image_url ('' coerced to null
@@ -1400,7 +1399,7 @@
    * an existing product's variant photos. The add button is disabled at
    * MAX_VARIANTS rows. Runs syncStockLock after every mutation.
    */
-  function addVariantRow(name, stock, imageUrl) {
+  function addVariantRow(name, inStock, imageUrl) {
     var container = $('variantesContainer');
 
     variantRowSeq += 1;
@@ -1430,19 +1429,15 @@
     stockField.className = 'form-field';
     var stockLabel = document.createElement('label');
     stockLabel.htmlFor = 'variant-stock-' + rowSuffix;
-    stockLabel.textContent = 'Stock';
+    stockLabel.className = 'checkbox-label';
     var stockInput = document.createElement('input');
     stockInput.id = 'variant-stock-' + rowSuffix;
-    stockInput.type = 'number';
+    stockInput.type = 'checkbox';
     stockInput.className = 'variant-stock';
-    stockInput.min = '0';
-    stockInput.max = String(MAX_VARIANT_STOCK);
-    stockInput.step = '1';
-    stockInput.setAttribute('inputmode', 'numeric');
-    stockInput.placeholder = '0';
-    stockInput.value = (stock === null || stock === undefined || stock === '') ? '' : String(stock);
+    stockInput.checked = inStock !== false;
+    stockLabel.appendChild(stockInput);
+    stockLabel.appendChild(document.createTextNode('Disponible'));
     stockField.appendChild(stockLabel);
-    stockField.appendChild(stockInput);
 
     var removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -1456,7 +1451,7 @@
     // Optional per-variant photo (FLI-7): hidden file input + "Elegir foto"
     // label + thumbnail preview. Rendered ONLY inside variant rows — a
     // variant-less product shows no photo control. Wraps to its own grid row
-    // below the name/stock/remove trio (admin.css .variant-photo).
+    // below the name/available/remove trio (admin.css .variant-photo).
     var photoField = document.createElement('div');
     photoField.className = 'form-field variant-photo';
 
@@ -1514,7 +1509,7 @@
     if (Array.isArray(variants)) {
       for (var i = 0; i < variants.length; i++) {
         var v = variants[i] || {};
-        addVariantRow(v.name, v.stock, v.image_url);
+        addVariantRow(v.name, v.in_stock, v.image_url);
       }
     }
   }
@@ -1538,7 +1533,7 @@
     syncStockLock();
   }
 
-  /** Stock edits re-derive the locked checkbox state (event-driven lock). */
+  /** Stock checkbox changes re-derive the locked checkbox state (event-driven lock). */
   function handleVariantesInput(e) {
     if (e.target && e.target.classList && e.target.classList.contains('variant-stock')) {
       syncStockLock();
@@ -1563,11 +1558,11 @@
   /**
    * Read the variant rows into a payload-ready array, validating per FV-1:
    * trimmed non-empty name ≤ 40 chars, unique case-insensitively, ≤ 10 rows,
-   * integer stock 0..9999. Fully-empty rows are skipped; a name-only row gets
-   * stock 0. Each harvested row also carries image_url (FLI-1): the uploaded
-   * public URL when the row has one, null when empty/missing — legacy rows
-   * without the dataset key harvest as null. Returns {rows} or {error} in the
-   * existing Spanish error style.
+   * boolean in_stock per variant. Fully-empty rows are skipped. Each harvested
+   * row also carries image_url (FLI-1): the uploaded public URL when the row
+   * has one, null when empty/missing — legacy rows without the dataset key
+   * harvest as null. Returns {rows} or {error} in the existing Spanish error
+   * style.
    */
   function collectVariantRows() {
     var rows = [];
@@ -1582,11 +1577,9 @@
       var nameInput = rowEls[i].querySelector('.variant-name');
       var stockInput = rowEls[i].querySelector('.variant-stock');
       var name = (nameInput ? nameInput.value : '').trim();
-      var stockRaw = stockInput ? stockInput.value.trim() : '';
 
-      if (!name && stockRaw === '') continue; // fully-empty row: skip
+      if (!name) continue; // empty row: skip
 
-      if (!name) return { error: 'Ingresá el nombre de la variante.' };
       if (name.length > MAX_VARIANT_NAME_LENGTH) {
         return { error: 'El nombre de la variante no puede superar los ' + MAX_VARIANT_NAME_LENGTH + ' caracteres.' };
       }
@@ -1595,13 +1588,10 @@
       if (seen[lower]) return { error: 'Ya existe una variante llamada "' + name + '".' };
       seen[lower] = true;
 
-      var stock = stockRaw === '' ? 0 : Number(stockRaw);
-      if (!isFinite(stock) || Math.floor(stock) !== stock || stock < 0 || stock > MAX_VARIANT_STOCK) {
-        return { error: 'El stock de "' + name + '" debe ser un número entero entre 0 y ' + MAX_VARIANT_STOCK + '.' };
-      }
+      var inStock = stockInput ? !!stockInput.checked : true;
 
       var rowUrl = rowEls[i].dataset.variantImageUrl || '';
-      rows.push({ name: name, stock: stock, image_url: rowUrl || null });
+      rows.push({ name: name, in_stock: inStock, image_url: rowUrl || null });
     }
 
     return { rows: rows };
@@ -1663,7 +1653,7 @@
       image_url: imageUrl,
       nutrition_image_url: nutritionUrl || null,
       variants: rows.length ? rows : null,
-      in_stock: rows.length ? rows.some(function (v) { return v.stock > 0; }) : $('prod-stock').checked,
+      in_stock: rows.length ? rows.some(function (v) { return v.in_stock; }) : $('prod-stock').checked,
       is_featured: $('prod-featured').checked
     };
   }
