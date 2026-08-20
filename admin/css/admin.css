@@ -891,7 +891,7 @@
 
 .variant-row {
   display: grid;
-  grid-template-columns: 1fr 80px auto;
+  grid-template-columns: 1fr 110px auto;
   gap: 12px;
   align-items: end;
 }
@@ -914,7 +914,7 @@
 
 /* Per-variant photo (flavor-images): "Elegir foto" + thumbnail. It is the 4th
    form-field of the row, so it wraps to its own full-width grid row under the
-   name/available/remove trio (row grid stays 1fr 80px auto — no layout shift). */
+   name/available/remove trio (row grid stays 1fr 110px auto — no layout shift). */
 .variant-row .variant-photo {
   grid-column: 1 / -1;
   display: flex;
