@@ -79,6 +79,44 @@ create index products_featured_idx on products (is_featured, home_order) where i
 alter table products add column if not exists variants jsonb;
 
 -- -----------------------------------------------------------------------------
+-- Variant shape reshape {stock:number} → {in_stock:boolean} (SAFE TO RE-RUN)
+-- -----------------------------------------------------------------------------
+-- Commit c206fa3 flipped the per-element shape from {name, stock:number} to
+-- {name, in_stock:boolean, image_url?} without a data migration. Legacy rows
+-- read `in_stock === undefined` → the storefront renders those products SIN
+-- STOCK while the admin checkbox masks it (checked). This rewrite converts
+-- every legacy element (numeric `stock`, no boolean `in_stock`): stock > 0
+-- becomes in_stock true, otherwise false; the old `stock` key is dropped and
+-- name / image_url are preserved. Already-converted elements pass through
+-- unchanged, so re-running it is a no-op.
+--
+-- Kept commented out on purpose: unlike add-column-if-not-exists, this UPDATE
+-- rewrites row data on every execution. Run it ONCE in the Supabase SQL Editor
+-- against any database created before c206fa3:
+--
+--     update products
+--        set variants = (
+--          select coalesce(jsonb_agg(converted order by ord), '[]'::jsonb)
+--            from jsonb_array_elements(variants) with ordinality as src(elem, ord),
+--                 lateral (
+--                   select case
+--                            when elem ? 'stock'
+--                                 and jsonb_typeof(elem -> 'stock') = 'number'
+--                                 and not coalesce(
+--                                       jsonb_typeof(elem -> 'in_stock') = 'boolean',
+--                                       false)
+--                              then jsonb_build_object(
+--                                     'name',      elem -> 'name',
+--                                     'in_stock',  coalesce((elem ->> 'stock')::numeric, 0) > 0,
+--                                     'image_url', elem -> 'image_url')
+--                            else elem
+--                          end as converted
+--                 ) conv
+--        )
+--      where variants is not null
+--        and jsonb_typeof(variants) = 'array';
+
+-- -----------------------------------------------------------------------------
 -- Row Level Security
 -- -----------------------------------------------------------------------------
 --
@@ -147,9 +185,13 @@ insert into storage.buckets (id, name, public)
 values ('productos', 'productos', true)
 on conflict (id) do nothing;
 
+-- NO anonymous SELECT policy here, on purpose (hardened state): public reads
+-- of /storage/v1/object/public/... rely on the bucket's `public` flag above,
+-- not on RLS. A blanket SELECT policy would additionally allow anyone to LIST
+-- the whole bucket via POST /storage/v1/object/list. The drop-if-exists below
+-- keeps databases created from older versions of this file hardened when this
+-- (re-runnable) section is applied again.
 drop policy if exists productos_public_read on storage.objects;
-create policy productos_public_read on storage.objects
-  for select using (bucket_id = 'productos');
 
 -- Write policies: admin only, bucket `productos`, paths under admin/, image
 -- extensions only, max 2MB. `name` holds the full object path, so the 'admin/'

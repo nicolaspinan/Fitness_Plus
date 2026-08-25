@@ -51,10 +51,11 @@
   };
 
   var editingCategoryId = null;
-  // Tracks the hero URL the category had when its form was opened, so that an
-  // explicitly removed hero object is only deleted from storage AFTER the
-  // database row stops referencing it (safe against canceling the form).
-  var previousCategoryHeroUrl = null;
+  // Storage objects displaced (replaced or removed) during each form session,
+  // keyed per form ('producto' | 'categoria'). They are deleted from storage
+  // ONLY AFTER the matching save succeeds, so canceling a form never leaves
+  // database rows pointing at deleted images.
+  var pendingObjectDeletes = { producto: [], categoria: [] };
   var editingProductId = null;
   var bannerTimer = null;
   var modalResolver = null;
@@ -254,6 +255,43 @@
         btn.textContent = btn.getAttribute('data-idle');
         btn.removeAttribute('data-idle');
       }
+    }
+  }
+
+  // Per-form in-flight operation counting: every async operation of a form
+  // (image uploads AND the save request itself) shares that form's single
+  // save button, so each op registers against a per-form counter instead of
+  // toggling the flag directly. The button locks on the first op (0→1) and
+  // unlocks only when the LAST op settles (1→0) — without this, the first
+  // completion re-enabled the button while sibling operations (other uploads,
+  // or the save itself) were still running.
+  var formBusyCount = { categoria: 0, producto: 0 };
+  var FORM_SAVE_BUTTONS = { categoria: 'btnSaveCategoria', producto: 'btnSaveProducto' };
+  var FORM_IDLE_LABELS = { categoria: 'Guardar categoría', producto: 'Guardar producto' };
+
+  /** Count one starting op of a form: lock its shared save button on the
+   *  0→1 transition. Once other ops of the same form are already running,
+   *  only swap the busy label ('Subiendo imagen…' / 'Guardando…'). */
+  function beginFormOp(formKey, busyText) {
+    formBusyCount[formKey] += 1;
+    var btn = $(FORM_SAVE_BUTTONS[formKey]);
+    if (formBusyCount[formKey] === 1) {
+      setBusy(btn, true, busyText);
+    } else if (btn && busyText) {
+      // Button already locked by a sibling op: calling setBusy(true) here
+      // would snapshot the current BUSY label as the new idle text, so
+      // touch only textContent.
+      btn.textContent = busyText;
+    }
+  }
+
+  /** Count one settled op (success or failure): unlock the shared save
+   *  button on the 1→0 transition, restoring the same idle label setBusy
+   *  managed before. Never counts below zero. */
+  function endFormOp(formKey) {
+    if (formBusyCount[formKey] > 0) formBusyCount[formKey] -= 1;
+    if (formBusyCount[formKey] === 0) {
+      setBusy($(FORM_SAVE_BUTTONS[formKey]), false, FORM_IDLE_LABELS[formKey]);
     }
   }
 
@@ -617,8 +655,18 @@
   }
 
   function openCategoryForm(id) {
+    // Busy guard (same convention as btnNuevaCategoria): opening while an
+    // upload or save of this form is still in flight would discard the
+    // pending-delete queue that op needs to flush. The row edit buttons reach
+    // here WITHOUT their own guard once route()/renderCategories() re-lists
+    // rows during that window (Back/Forward, manual hash edits), so the guard
+    // lives here where every caller funnels through.
+    if ($('btnSaveCategoria').hasAttribute('disabled')) return;
     var cat = id ? findCategory(id) : null;
     editingCategoryId = id || null;
+    // Fresh form session: nothing displaced yet, drop any stale queue so a
+    // previous cancelled session can never delete this session's images.
+    clearPendingObjectDeletes('categoria');
     $('categoriaFormTitle').textContent = cat ? 'Editar categoría' : 'Nueva categoría';
     $('categoriaError').classList.add('hidden');
 
@@ -630,7 +678,6 @@
     $('cat-section-subtitle').value = cat ? cat.section_subtitle : '';
 
     var heroUrl = cat && cat.hero_image_url ? cat.hero_image_url : '';
-    previousCategoryHeroUrl = heroUrl;
     $('cat-hero-url').value = heroUrl;
     setPreview($('cat-hero-preview'), heroUrl);
     $('btnCatHeroRemove').classList.toggle('hidden', !heroUrl);
@@ -645,7 +692,18 @@
   function closeCategoryForm() {
     $('categoriaForm').classList.add('hidden');
     editingCategoryId = null;
-    previousCategoryHeroUrl = null;
+    // Cancelled/closed without saving: keep every displaced object alive (the
+    // DB still references it) and just discard the queue.
+    // Boundary guard: while the save button is disabled an async operation
+    // (upload or save) is still in flight and needs this queue for its flush.
+    // Paths that bypass the guarded click closures — hashchange → route() →
+    // renderCategories() (Back/Forward, manual hash edits) and cross-tab
+    // storage events — land here too, so skip ONLY the clear: the in-flight
+    // op's own success handler flushes the queue, and openCategoryForm clears
+    // whatever is left on the next open.
+    if (!$('btnSaveCategoria').hasAttribute('disabled')) {
+      clearPendingObjectDeletes('categoria');
+    }
     $('cat-hero-file').value = '';
     $('cat-hero-url').value = '';
     setPreview($('cat-hero-preview'), '');
@@ -656,11 +714,14 @@
     // Busy (uploading or saving): an in-flight upload would overwrite the URL
     // right after we clear it, resurrecting the image. Ignore the click.
     if ($('btnSaveCategoria').hasAttribute('disabled')) return;
+    // Deferred: the removed object is queued like a replaced hero and deleted
+    // only after the category save succeeds, so canceling the form never
+    // orphans a URL the DB row still references (flush skips anything still
+    // referenced by the saved payload).
+    queueStoredObjectDelete($('cat-hero-url').value.trim(), 'categoria');
     $('cat-hero-url').value = '';
     setPreview($('cat-hero-preview'), '');
     $('btnCatHeroRemove').classList.add('hidden');
-    // The stored object is deleted only after a successful save (see
-    // handleCategorySubmit) so canceling the form never orphans a broken URL.
   }
 
   function handleCategorySubmit(e) {
@@ -686,7 +747,7 @@
       return showFormError(errEl, 'La URL del hero debe ser válida (http/https).');
     }
 
-    setBusy($('btnSaveCategoria'), true, 'Guardando…');
+    beginFormOp('categoria', 'Guardando…');
     var payload = {
       name: name,
       slug: slug,
@@ -707,11 +768,15 @@
     }
 
     request.then(function () {
-      if (previousCategoryHeroUrl && heroImageUrl !== previousCategoryHeroUrl) {
-        // The image was removed or replaced: the row no longer references the
-        // old object, so it can be cleaned up (best-effort, must never block).
-        removeStoredObject(previousCategoryHeroUrl);
-      }
+      // Save succeeded: the DB row now references exactly what's in the
+      // payload, so displaced objects can be cleaned up. Skip anything still
+      // referenced — e.g. a hero URL re-pasted into the field before saving
+      // must not be deleted underneath the saved row. Replaced AND removed
+      // heroes are both queued (bindUpload / removeCategoryHeroImage), so the
+      // queue covers every displaced object of this form session.
+      var stillReferenced = {};
+      if (payload.hero_image_url) stillReferenced[payload.hero_image_url] = true;
+      flushPendingObjectDeletes('categoria', stillReferenced);
       showBanner(editingCategoryId ? 'Categoría actualizada.' : 'Categoría creada.', 'success');
       closeCategoryForm();
       renderCategories();
@@ -723,7 +788,7 @@
         showFormError(errEl, 'No se pudo guardar la categoría. Intentá de nuevo.');
       }
     }).then(function () {
-      setBusy($('btnSaveCategoria'), false, 'Guardar categoría');
+      endFormOp('categoria');
     });
   }
 
@@ -1315,8 +1380,18 @@
   }
 
   function openProductForm(id) {
+    // Busy guard (same convention as btnNuevoProducto): opening while an
+    // upload or save of this form is still in flight would discard the
+    // pending-delete queue that op needs to flush. The row edit buttons reach
+    // here WITHOUT their own guard once route()/renderProducts() re-lists
+    // rows during that window, so the guard lives here where every caller
+    // funnels through.
+    if ($('btnSaveProducto').hasAttribute('disabled')) return;
     var p = id ? findProduct(id) : null;
     editingProductId = id || null;
+    // Fresh form session: nothing displaced yet, drop any stale queue so a
+    // previous cancelled session can never delete this session's images.
+    clearPendingObjectDeletes('producto');
     $('productoFormTitle').textContent = p ? 'Editar producto' : 'Nuevo producto';
     $('productoError').classList.add('hidden');
 
@@ -1354,6 +1429,15 @@
     clearVariantRows();
     $('productoForm').classList.add('hidden');
     editingProductId = null;
+    // Cancelled/closed without saving: keep every displaced object alive (the
+    // DB still references it) and just discard the queue. After a successful
+    // save this is a no-op — the queue was already flushed.
+    // Boundary guard: same as closeCategoryForm — skip ONLY the clear while
+    // the save button is disabled, because an upload or the save itself is
+    // still in flight and needs the queue for its flush.
+    if (!$('btnSaveProducto').hasAttribute('disabled')) {
+      clearPendingObjectDeletes('producto');
+    }
   }
 
   // ---- variant rows (flavor-variants) -------------------------------------------
@@ -1515,16 +1599,18 @@
   }
 
   /** Row removal (delegated on the container — CSP-safe, no inline handlers).
-   *  Best-effort orphan cleanup: an uploaded variant photo is removed from
-   *  storage BEFORE the row leaves the DOM (FLI-6 / SCF-4) — remove never
-   *  blocks on a storage failure (removeStoredObject swallows errors). */
+   *  The row's photo object is queued for deletion instead of being removed
+   *  from storage immediately: until the product save succeeds the DB variants
+   *  array may still reference it, so canceling after a removal must keep it
+   *  alive (deferred-delete convention — flush happens in
+   *  handleProductSubmit; remove never blocks on a storage failure). */
   function handleVariantesClick(e) {
     var btn = e.target && e.target.closest ? e.target.closest('.variant-remove') : null;
     if (!btn) return;
     var row = btn.closest('.variant-row');
     if (!row || !row.parentNode) return;
     var rowImageUrl = row.dataset.variantImageUrl || '';
-    if (rowImageUrl) removeStoredObject(rowImageUrl);
+    if (rowImageUrl) queueStoredObjectDelete(rowImageUrl, 'producto');
     row.parentNode.removeChild(row);
     if ($('variantesContainer').querySelectorAll('.variant-row').length === 0) {
       $('variantesEmpty').classList.remove('hidden');
@@ -1558,11 +1644,13 @@
   /**
    * Read the variant rows into a payload-ready array, validating per FV-1:
    * trimmed non-empty name ≤ 40 chars, unique case-insensitively, ≤ 10 rows,
-   * boolean in_stock per variant. Fully-empty rows are skipped. Each harvested
-   * row also carries image_url (FLI-1): the uploaded public URL when the row
-   * has one, null when empty/missing — legacy rows without the dataset key
-   * harvest as null. Returns {rows} or {error} in the existing Spanish error
-   * style.
+   * boolean in_stock per variant. Fully-empty rows (no name AND no photo) are
+   * skipped; a row with ANY content (e.g. an uploaded photo stashed in the
+   * dataset) but no name raises an error instead of being silently dropped.
+   * Each harvested row also carries image_url (FLI-1): the uploaded public URL
+   * when the row has one, null when empty/missing — legacy rows without the
+   * dataset key harvest as null. Returns {rows} or {error} in the existing
+   * Spanish error style.
    */
   function collectVariantRows() {
     var rows = [];
@@ -1577,8 +1665,13 @@
       var nameInput = rowEls[i].querySelector('.variant-name');
       var stockInput = rowEls[i].querySelector('.variant-stock');
       var name = (nameInput ? nameInput.value : '').trim();
+      var rowUrl = rowEls[i].dataset.variantImageUrl || '';
 
-      if (!name) continue; // empty row: skip
+      if (!name && !rowUrl) continue; // fully empty row: skip
+
+      // Row has content (uploaded photo) but no name: fail loudly rather than
+      // silently dropping the photo on save.
+      if (!name) return { error: 'Ingresá el nombre de la variante.' };
 
       if (name.length > MAX_VARIANT_NAME_LENGTH) {
         return { error: 'El nombre de la variante no puede superar los ' + MAX_VARIANT_NAME_LENGTH + ' caracteres.' };
@@ -1590,7 +1683,6 @@
 
       var inStock = stockInput ? !!stockInput.checked : true;
 
-      var rowUrl = rowEls[i].dataset.variantImageUrl || '';
       rows.push({ name: name, in_stock: inStock, image_url: rowUrl || null });
     }
 
@@ -1669,7 +1761,7 @@
       return;
     }
 
-    setBusy($('btnSaveProducto'), true, 'Guardando…');
+    beginFormOp('producto', 'Guardando…');
 
     var request;
     if (editingProductId) {
@@ -1686,6 +1778,19 @@
     }
 
     request.then(function () {
+      // Save succeeded: the DB row now references exactly what's in the
+      // payload, so displaced objects can be cleaned up. Skip anything still
+      // referenced (e.g. the same URL re-pasted into a field before saving).
+      var stillReferenced = {};
+      stillReferenced[payload.image_url] = true;
+      if (payload.nutrition_image_url) stillReferenced[payload.nutrition_image_url] = true;
+      if (Array.isArray(payload.variants)) {
+        for (var i = 0; i < payload.variants.length; i++) {
+          var vUrl = payload.variants[i] && payload.variants[i].image_url;
+          if (vUrl) stillReferenced[vUrl] = true;
+        }
+      }
+      flushPendingObjectDeletes('producto', stillReferenced);
       showBanner(editingProductId ? 'Producto actualizado.' : 'Producto creado.', 'success');
       closeProductForm();
       renderProducts();
@@ -1693,7 +1798,7 @@
       if (isAuthError(err)) { goLogin(); return; }
       showFormError(errEl, 'No se pudo guardar el producto. Revisá los datos e intentá de nuevo.');
     }).then(function () {
-      setBusy($('btnSaveProducto'), false, 'Guardar producto');
+      endFormOp('producto');
     });
   }
 
@@ -1727,11 +1832,46 @@
   }
 
   /**
+   * Queue a displaced object URL (image replaced or removed in the form)
+   * instead of deleting it immediately: the DB may still reference it until
+   * the form's save succeeds. Flushed by flushPendingObjectDeletes.
+   */
+  function queueStoredObjectDelete(url, formKey) {
+    if (!url || !formKey || !pendingObjectDeletes[formKey]) return;
+    pendingObjectDeletes[formKey].push(url);
+  }
+
+  /**
+   * Delete every object the form session displaced (best-effort, never
+   * blocks). Called ONLY after the matching save succeeded — the DB row no
+   * longer references them at that point. `referenced` is an optional map of
+   * URLs still present in the saved payload; those are skipped so a URL
+   * re-entered into a field before saving is not deleted underneath it.
+   */
+  function flushPendingObjectDeletes(formKey, referenced) {
+    var list = pendingObjectDeletes[formKey] || [];
+    pendingObjectDeletes[formKey] = [];
+    for (var i = 0; i < list.length; i++) {
+      if (referenced && referenced[list[i]]) continue;
+      removeStoredObject(list[i]);
+    }
+  }
+
+  /** Drop queued deletions without deleting (form closed/cancelled/opened). */
+  function clearPendingObjectDeletes(formKey) {
+    pendingObjectDeletes[formKey] = [];
+  }
+
+  /**
    * Bind one file input → URL input + preview pair.
    * Preview via FileReader.readAsDataURL (data: URL — allowed by img-src data:).
    * URL.createObjectURL is NEVER used for image previews.
+   * formKey ('producto' | 'categoria') routes the REPLACED previous object to
+   * that form's pending-deletion queue: it is removed from storage only
+   * after the form's save succeeds, so canceling after a replace never
+   * orphans a still-referenced image.
    */
-  function bindUpload(fileInputId, urlInputId, previewId, busyButtonId, removeButtonId) {
+  function bindUpload(fileInputId, urlInputId, previewId, busyButtonId, removeButtonId, formKey) {
     busyButtonId = busyButtonId || 'btnSaveProducto';
     var fileInput = $(fileInputId);
     var urlInput = $(urlInputId);
@@ -1757,11 +1897,15 @@
 
       var path = 'admin/' + Date.now() + '-' + safeFileName(file.name);
       fileInput.setAttribute('disabled', 'disabled');
-      setBusy($(busyButtonId), true, 'Subiendo imagen…');
+      // Counted against the form's shared save-button flag: the button stays
+      // locked while this AND any sibling op (other uploads / the save) run.
+      beginFormOp(formKey, 'Subiendo imagen…');
       window.Supabase.upload(BUCKET, path, file, { timeout: 30000 }).then(function () {
         var previousUrl = urlInput.value.trim();
         urlInput.value = window.Supabase.publicUrl(BUCKET, path);
-        if (previousUrl) removeStoredObject(previousUrl);
+        // Deferred: the replaced object is deleted only after this form's
+        // save succeeds (see queueStoredObjectDelete / handle*Submit).
+        if (previousUrl) queueStoredObjectDelete(previousUrl, formKey);
         if (removeButtonId) $(removeButtonId).classList.remove('hidden');
         showBanner('Imagen subida correctamente.', 'success');
       }).catch(function (err) {
@@ -1774,7 +1918,7 @@
       }).then(function () {
         fileInput.removeAttribute('disabled');
         fileInput.value = '';
-        setBusy($(busyButtonId), false, 'Guardar ' + (busyButtonId === 'btnSaveCategoria' ? 'categoría' : 'producto'));
+        endFormOp(formKey);
       });
     });
 
@@ -1789,8 +1933,9 @@
    * (FLI-7 / SCF-4). Mirrors bindUpload verbatim: 'admin/' + timestamp +
    * safeFileName path, bucket 'productos', png/jpeg/webp ≤ 2MB, 30s timeout,
    * FileReader data: preview (never URL.createObjectURL), and delete-on-replace
-   * of the row's PREVIOUS URL via removeStoredObject (best-effort) BEFORE the
-   * new one is stashed. On success the public URL is saved in
+   * of the row's PREVIOUS URL — DEFERRED to the 'producto' queue so the old
+   * object is removed only after the product save succeeds (cancelling the
+   * form keeps it alive). On success the public URL is saved in
    * row.dataset.variantImageUrl so collectVariantRows can harvest it.
    */
   function bindVariantUpload(rowEl) {
@@ -1818,11 +1963,14 @@
 
       var path = 'admin/' + Date.now() + '-' + safeFileName(file.name);
       fileInput.setAttribute('disabled', 'disabled');
-      setBusy($('btnSaveProducto'), true, 'Subiendo imagen…');
+      // Counted against the product form's shared save-button flag (same
+      // refcount as the main/nutrition uploads and the save itself).
+      beginFormOp('producto', 'Subiendo imagen…');
       window.Supabase.upload(BUCKET, path, file, { timeout: 30000 }).then(function () {
         var previousUrl = rowEl.dataset.variantImageUrl || '';
         rowEl.dataset.variantImageUrl = window.Supabase.publicUrl(BUCKET, path);
-        if (previousUrl) removeStoredObject(previousUrl);
+        // Deferred: deleted only after the product save succeeds.
+        if (previousUrl) queueStoredObjectDelete(previousUrl, 'producto');
         showBanner('Imagen subida correctamente.', 'success');
       }).catch(function (err) {
         if (isAuthError(err)) { goLogin(); return; }
@@ -1833,7 +1981,7 @@
       }).then(function () {
         fileInput.removeAttribute('disabled');
         fileInput.value = '';
-        setBusy($('btnSaveProducto'), false, 'Guardar producto');
+        endFormOp('producto');
       });
     });
   }
@@ -1967,15 +2115,35 @@
     bindLogin();
     $('btnLogout').addEventListener('click', logout);
     $('btnExportar').addEventListener('click', exportBackup);
-    $('btnNuevaCategoria').addEventListener('click', function () { openCategoryForm(null); });
+    $('btnNuevaCategoria').addEventListener('click', function () {
+      // Busy guard: reopening the form discards the pending-delete queue the
+      // in-flight save still needs to flush (see btnCloseCategoria below).
+      if ($('btnSaveCategoria').hasAttribute('disabled')) return;
+      openCategoryForm(null);
+    });
     $('btnCloseCategoria').addEventListener('click', function () {
+      // Busy (uploading or saving): closing now would discard the pending-
+      // delete queue before the in-flight save can flush it, leaving every
+      // object displaced this session as orphaned storage. Ignore the click
+      // (same guard as removeCategoryHeroImage).
+      if ($('btnSaveCategoria').hasAttribute('disabled')) return;
       closeCategoryForm();
       renderCategories();
     });
     $('categoriaForm').addEventListener('submit', handleCategorySubmit);
     $('btnCatHeroRemove').addEventListener('click', removeCategoryHeroImage);
-    $('btnNuevoProducto').addEventListener('click', function () { openProductForm(null); });
+    $('btnNuevoProducto').addEventListener('click', function () {
+      // Busy guard: reopening the form discards the pending-delete queue the
+      // in-flight save still needs to flush (see btnCloseProducto below).
+      if ($('btnSaveProducto').hasAttribute('disabled')) return;
+      openProductForm(null);
+    });
     $('btnCloseProducto').addEventListener('click', function () {
+      // Busy (uploading or saving): closing now would discard the pending-
+      // delete queue before the in-flight save can flush it, leaving every
+      // object displaced this session as orphaned storage. Ignore the click
+      // (same guard as removeCategoryHeroImage).
+      if ($('btnSaveProducto').hasAttribute('disabled')) return;
       closeProductForm();
       renderProducts();
     });
@@ -1985,9 +2153,9 @@
     $('productoForm').addEventListener('submit', handleProductSubmit);
     $('textosForm').addEventListener('submit', handleTextsSubmit);
     bindProductTabs();
-    bindUpload('prod-image-file', 'prod-image-url', 'prod-image-preview');
-    bindUpload('prod-nutrition-file', 'prod-nutrition-url', 'prod-nutrition-preview');
-    bindUpload('cat-hero-file', 'cat-hero-url', 'cat-hero-preview', 'btnSaveCategoria', 'btnCatHeroRemove');
+    bindUpload('prod-image-file', 'prod-image-url', 'prod-image-preview', null, null, 'producto');
+    bindUpload('prod-nutrition-file', 'prod-nutrition-url', 'prod-nutrition-preview', null, null, 'producto');
+    bindUpload('cat-hero-file', 'cat-hero-url', 'cat-hero-preview', 'btnSaveCategoria', 'btnCatHeroRemove', 'categoria');
     bindModal();
     bindMobileNav();
 

@@ -166,13 +166,18 @@
    * perform() — one request with the token lifecycle policy:
    *   1. authenticated call + token close to expiry  → refresh first
    *   2. server answers 401 + a session existed      → refresh once, retry once
+   * Anonymous operations never carry the stored session token: they always go
+   * out with the publishable/anon key so an expiring/rotating admin token can
+   * never break public rendering.
    * Refresh failure throws a SupabaseError (reason 'auth') so callers can
    * redirect to login without persisting partial data.
    */
   function perform(path, opts, retried) {
     var cfg = getConfig();
     var session = getSession();
-    var token = (session && session.access_token) || null;
+    // Attach the stored Bearer token ONLY for authenticated operations; every
+    // anonymous call falls back to cfg.key even if an admin session exists.
+    var token = (opts.authenticated && session && session.access_token) || null;
 
     if (opts.authenticated && token && session && isSessionExpired(session)) {
       return refreshSession().then(function () {
@@ -223,17 +228,28 @@
     return signInWithPassword(email, password);
   }
 
+  // In-flight refresh promise (single-flight): concurrent 401 handlers must
+  // share ONE refresh_token rotation. Supabase rotates (and immediately
+  // invalidates) the refresh token on every grant, so two parallel calls turn
+  // the loser into "refresh_token already used"; its clearSession() would then
+  // wipe the freshly saved valid session and spuriously log the admin out.
+  var refreshingPromise = null;
+
   function refreshSession() {
+    if (refreshingPromise) return refreshingPromise;
     var cfg = getConfig();
     var session = getSession();
     if (!session || !session.refresh_token) {
       clearSession();
       throw new SupabaseError('No session to refresh.', { reason: 'auth' });
     }
-    return request(cfg, '/auth/v1/token?grant_type=refresh_token', {
+    refreshingPromise = request(cfg, '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
       body: JSON.stringify({ refresh_token: session.refresh_token })
     }).then(function (res) {
+      // Settled: release the single-flight slot so a later caller starts a
+      // fresh rotation against the newly saved refresh token.
+      refreshingPromise = null;
       if (!res.ok) {
         clearSession();
         throw new SupabaseError('Session expired. Sign in again.', { status: res.status, reason: 'auth' });
@@ -246,7 +262,11 @@
         user: data.user || session.user || null
       };
       return saveSession(fresh);
+    }, function (err) {
+      refreshingPromise = null;
+      throw err;
     });
+    return refreshingPromise;
   }
 
   function signOut() {
